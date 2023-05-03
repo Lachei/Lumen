@@ -15,13 +15,12 @@ enum class IntegratorType { Path, BDPT, SPPM, VCM, PSSMLT, SMLT, VCMMLT, ReSTIR,
 struct SceneConfig {
 	int path_length = 6;
 	glm::vec3 sky_col = glm::vec3(0);
-	const std::string integrator_name = "Path";
-	IntegratorType integrator_type = IntegratorType::Path;
+	std::string integrator_name = "Path";
 	CameraSettings cam_settings;
 
 	SceneConfig() = default;
-	SceneConfig(const std::string& integrator_name, IntegratorType type)
-		: integrator_name(integrator_name), integrator_type(type) {}
+	SceneConfig(const std::string& integrator_name)
+		: integrator_name(integrator_name) {}
 };
 
 struct PathConfig : SceneConfig {};

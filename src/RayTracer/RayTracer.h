@@ -2,16 +2,6 @@
 #include "LumenPCH.h"
 #include "Framework/LumenInstance.h"
 #include "Framework/ImageUtils.h"
-#include "Path.h"
-#include "BDPT.h"
-#include "SPPM.h"
-#include "VCM.h"
-#include "PSSMLT.h"
-#include "SMLT.h"
-#include "VCMMLT.h"
-#include "ReSTIR.h"
-#include "ReSTIRGI.h"
-#include "DDGI.h"
 #include "PostFX.h"
 
 class RayTracer : public LumenInstance {
@@ -30,7 +20,7 @@ class RayTracer : public LumenInstance {
 	void parse_args(int argc, char* argv[]);
 	float draw_frame();
 	void render(uint32_t idx);
-	void create_integrator(int integrator_idx);
+	void create_integrator(std::string_view integrator_id);
 	bool gui();
 	bool initialized = false;
 	bool rt_initialized = false;

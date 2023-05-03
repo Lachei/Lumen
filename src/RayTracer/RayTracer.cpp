@@ -8,6 +8,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "RayTracer.h"
 #include <string.h>
+#include "IntegratorRegistry.h"
 
 RayTracer* RayTracer::instance = nullptr;
 bool load_reference = false;
@@ -179,41 +180,8 @@ void RayTracer::render(uint32_t i) {
 	vk::check(vkEndCommandBuffer(cmdbuf), "Failed to record command buffer");
 }
 
-void RayTracer::create_integrator(int integrator_idx) {
-	switch (integrator_idx) {
-		case int(IntegratorType::Path):
-			integrator = std::make_unique<Path>(this, &scene);
-			break;
-		case int(IntegratorType::BDPT):
-			integrator = std::make_unique<BDPT>(this, &scene);
-			break;
-		case int(IntegratorType::SPPM):
-			integrator = std::make_unique<SPPM>(this, &scene);
-			break;
-		case int(IntegratorType::VCM):
-			integrator = std::make_unique<VCM>(this, &scene);
-			break;
-		case int(IntegratorType::ReSTIR):
-			integrator = std::make_unique<ReSTIR>(this, &scene);
-			break;
-		case int(IntegratorType::ReSTIRGI):
-			integrator = std::make_unique<ReSTIRGI>(this, &scene);
-			break;
-		case int(IntegratorType::PSSMLT):
-			integrator = std::make_unique<PSSMLT>(this, &scene);
-			break;
-		case int(IntegratorType::SMLT):
-			integrator = std::make_unique<SMLT>(this, &scene);
-			break;
-		case int(IntegratorType::VCMMLT):
-			integrator = std::make_unique<VCMMLT>(this, &scene);
-			break;
-		case int(IntegratorType::DDGI):
-			integrator = std::make_unique<DDGI>(this, &scene);
-			break;
-		default:
-			break;
-	}
+void RayTracer::create_integrator(std::string_view integrator_id) {
+	integrator = IntegratorRegistry::integrators[integrator_id].create(this, &scene);
 }
 
 bool RayTracer::gui() {
@@ -234,14 +202,13 @@ bool RayTracer::gui() {
 		updated |= true;
 	}
 
-	const char* settings[] = {"Path", "BDPT", "SPPM", "VCM", "PSSMLT", "SMLT", "VCMMLT", "ReSTIR", "ReSTIRGI", "DDGI"};
-
-	static int curr_integrator_idx = int(scene.config->integrator_type);
-	if (ImGui::BeginCombo("Select Integrator", settings[curr_integrator_idx])) {
-		for (int n = 0; n < IM_ARRAYSIZE(settings); n++) {
-			const bool selected = curr_integrator_idx == n;
-			if (ImGui::Selectable(settings[n], selected)) {
-				curr_integrator_idx = n;
+	bool integrator_changed{};
+	if (ImGui::BeginCombo("Select Integrator", scene.config->integrator_name.c_str())) {
+		for (auto& [integrator_type, entry]: IntegratorRegistry::integrators) {
+			const bool selected = integrator_type == scene.config->integrator_name;
+			if (ImGui::Selectable(integrator_type.data())) {
+				integrator_changed = scene.config->integrator_name != integrator_type;
+				scene.config->integrator_name = std::string(integrator_type);
 			}
 
 			// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
