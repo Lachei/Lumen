@@ -90,40 +90,39 @@ void LumenScene::load_scene(const std::string& path) {
 		json j;
 		i >> j;
 
-		auto& integrator = j["integrator"];
+		integrator_config = j["integrator"];
 
-		create_scene_config(integrator["type"]);
+		config.integrator_name = integrator_config["type"];
+		if (!integrator_config["path_length"].is_null()) {
+			config.path_length = integrator_config["path_length"];
+		}
+		if (!integrator_config["sky_col"].is_null()) {
+			auto sky = integrator_config["sky_col"];
+			config.sky_col = glm::vec3(sky[0], sky[1], sky[2]);
+		}
 
-		SceneConfig* curr_config = config.get();
-		if (!integrator["path_length"].is_null()) {
-			curr_config->path_length = integrator["path_length"];
-		}
-		if (!integrator["sky_col"].is_null()) {
-			auto sky = integrator["sky_col"];
-			curr_config->sky_col = glm::vec3(sky[0], sky[1], sky[2]);
-		}
-		if (integrator["type"] == "sppm") {
-			((SPPMConfig*)curr_config)->base_radius = integrator["base_radius"];
-		} else if (integrator["type"] == "vcm") {
-			((VCMConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
-			((VCMConfig*)curr_config)->radius_factor = integrator["radius_factor"];
-		} else if (integrator["type"] == "pssmlt") {
-			((PSSMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-			((PSSMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-			((PSSMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-		} else if (integrator["type"] == "smlt") {
-			((SMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-			((SMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-			((SMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-		} else if (integrator["type"] == "vcmmlt") {
-			((VCMMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-			((VCMMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-			((VCMMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-			((VCMMLTConfig*)curr_config)->radius_factor = integrator["radius_factor"];
-			((VCMMLTConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
-			((VCMMLTConfig*)curr_config)->alternate = integrator["alternate"] == 1;
-			((VCMMLTConfig*)curr_config)->light_first = integrator["light_first"] == 1;
-		}
+		//if (integrator["type"] == "sppm") {
+		//	((SPPMConfig*)curr_config)->base_radius = integrator["base_radius"];
+		//} else if (integrator["type"] == "vcm") {
+		//	((VCMConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
+		//	((VCMConfig*)curr_config)->radius_factor = integrator["radius_factor"];
+		//} else if (integrator["type"] == "pssmlt") {
+		//	((PSSMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
+		//	((PSSMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
+		//	((PSSMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
+		//} else if (integrator["type"] == "smlt") {
+		//	((SMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
+		//	((SMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
+		//	((SMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
+		//} else if (integrator["type"] == "vcmmlt") {
+		//	((VCMMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
+		//	((VCMMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
+		//	((VCMMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
+		//	((VCMMLTConfig*)curr_config)->radius_factor = integrator["radius_factor"];
+		//	((VCMMLTConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
+		//	((VCMMLTConfig*)curr_config)->alternate = integrator["alternate"] == 1;
+		//	((VCMMLTConfig*)curr_config)->light_first = integrator["light_first"] == 1;
+		//}
 		// Load obj file
 		const std::string mesh_file = root + std::string(j["mesh_file"]);
 		tinyobj::ObjReaderConfig reader_config;
@@ -264,11 +263,11 @@ void LumenScene::load_scene(const std::string& path) {
 			bsdf_idx++;
 		}
 
-		curr_config->cam_settings.fov = j["camera"]["fov"];
+		config.cam_settings.fov = j["camera"]["fov"];
 		const auto& p = j["camera"]["position"];
 		const auto& d = j["camera"]["dir"];
-		curr_config->cam_settings.pos = {p[0], p[1], p[2]};
-		curr_config->cam_settings.dir = {d[0], d[1], d[2]};
+		config.cam_settings.pos = {p[0], p[1], p[2]};
+		config.cam_settings.dir = {d[0], d[1], d[2]};
 		compute_scene_dimensions();
 		for (auto& light : lights_arr) {
 			const auto& pos = light["pos"];
@@ -294,21 +293,19 @@ void LumenScene::load_scene(const std::string& path) {
 		MitsubaParser mitsuba_parser;
 		mitsuba_parser.parse(path);
 
-		create_scene_config(mitsuba_parser.integrator.type);
-
-		SceneConfig* curr_config = config.get();
-
-		curr_config->path_length = mitsuba_parser.integrator.depth;
-		curr_config->sky_col = mitsuba_parser.integrator.sky_col;
+		config.path_length = mitsuba_parser.integrator.depth;
+		config.sky_col = mitsuba_parser.integrator.sky_col;
 		// TODO: Introduce other config settings for Mitsuba format
 		if (mitsuba_parser.integrator.type == "vcm") {
-			((VCMConfig*)curr_config)->integrator_type = IntegratorType::VCM;
-			((VCMConfig*)curr_config)->enable_vm = mitsuba_parser.integrator.enable_vm;
+			integrator_config["integrator_type"] = "VCM";
+			integrator_config["enable_vm"] = mitsuba_parser.integrator.enable_vm;
+			//((VCMConfig*)curr_config)->integrator_type = IntegratorType::VCM;
+			//((VCMConfig*)curr_config)->enable_vm = mitsuba_parser.integrator.enable_vm;
 		}
 
 		// Camera
-		curr_config->cam_settings.fov = mitsuba_parser.camera.fov / 2;
-		curr_config->cam_settings.cam_matrix = mitsuba_parser.camera.cam_matrix;
+		config.cam_settings.fov = mitsuba_parser.camera.fov / 2;
+		config.cam_settings.cam_matrix = mitsuba_parser.camera.cam_matrix;
 		prim_meshes.resize(mitsuba_parser.meshes.size());
 		// Load objs
 		int i = 0;
@@ -466,34 +463,6 @@ void LumenScene::load_scene(const std::string& path) {
 			}
 			i++;
 		}
-	}
-}
-
-void LumenScene::create_scene_config(const std::string& integrator_name) {
-	std::string name = integrator_name;
-	std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-	if (name == "path") {
-		config = std::make_unique<PathConfig>();
-	} else if (name == "bdpt") {
-		config = std::make_unique<BDPTConfig>();
-	} else if (name == "sppm") {
-		config = std::make_unique<SPPMConfig>();
-	} else if (name == "vcm") {
-		config = std::make_unique<VCMConfig>();
-	} else if (name == "pssmlt") {
-		config = std::make_unique<PSSMLTConfig>();
-	} else if (name == "smlt") {
-		config = std::make_unique<SMLTConfig>();
-	} else if (name == "vcmmlt") {
-		config = std::make_unique<VCMMLTConfig>();
-	} else if (name == "restir") {
-		config = std::make_unique<ReSTIRConfig>();
-	} else if (name == "restirgi") {
-		config = std::make_unique<ReSTIRGIConfig>();
-	} else if (name == "ddgi") {
-		config = std::make_unique<DDGIConfig>();
-	} else {
-		config = std::make_unique<PathConfig>();
 	}
 }
 

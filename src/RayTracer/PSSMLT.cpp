@@ -4,32 +4,36 @@
 
 void PSSMLT::init() {
 	Integrator::init();
-	light_path_rand_count = 7 + 2 * config->path_length;
-	cam_path_rand_count = 2 + 2 * config->path_length;
-	connect_path_rand_count = 4 * config->path_length;
+	light_path_rand_count = 7 + 2 * config.path_length;
+	cam_path_rand_count = 2 + 2 * config.path_length;
+	connect_path_rand_count = 4 * config.path_length;
+
+	const size_t num_bootstrap_samples = static_cast<size_t>(integrator_config["num_bootstrap_samples"]);
+	const size_t num_mlt_threads = static_cast<size_t>(integrator_config["num_mlt_threads"]);
+	const size_t mutations_per_pixel = static_cast<size_t>(integrator_config["mutations_per_pixel"]);
 
 	// MLTVCM buffers
 	bootstrap_buffer.create("Bootstrap Buffer", &instance->vkb.ctx,
 							VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 							VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							config->num_bootstrap_samples * sizeof(BootstrapSample));
+							num_bootstrap_samples * sizeof(BootstrapSample));
 
 	cdf_buffer.create("CDF", &instance->vkb.ctx,
 					  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 						  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 					  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-					  config->num_bootstrap_samples * sizeof(float));
+					  num_bootstrap_samples * sizeof(float));
 
 	bootstrap_cpu.create("Boostrap - CPU", &instance->vkb.ctx,
 						 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 						 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						 VK_SHARING_MODE_EXCLUSIVE, config->num_bootstrap_samples * sizeof(BootstrapSample));
+						 VK_SHARING_MODE_EXCLUSIVE, num_bootstrap_samples * sizeof(BootstrapSample));
 
 	cdf_cpu.create("CDF - CPU", &instance->vkb.ctx,
 				   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				   VK_SHARING_MODE_EXCLUSIVE, config->num_bootstrap_samples * sizeof(float));
+				   VK_SHARING_MODE_EXCLUSIVE, num_bootstrap_samples * sizeof(float));
 
 	cdf_sum_buffer.create("CDF Sums", &instance->vkb.ctx,
 						  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -40,32 +44,32 @@ void PSSMLT::init() {
 						VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 							VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-						config->num_mlt_threads * sizeof(SeedData));
+						num_mlt_threads * sizeof(SeedData));
 
 	light_primary_samples_buffer.create("Primary Samples - Light", &instance->vkb.ctx,
 										VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 											VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 										VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-										config->num_mlt_threads * light_path_rand_count * sizeof(PrimarySample));
+										num_mlt_threads * light_path_rand_count * sizeof(PrimarySample));
 
 	cam_primary_samples_buffer.create("Primary Samples - Camera", &instance->vkb.ctx,
 									  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 										  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 									  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-									  config->num_mlt_threads * cam_path_rand_count * sizeof(PrimarySample));
+									  num_mlt_threads * cam_path_rand_count * sizeof(PrimarySample));
 
 	connection_primary_samples_buffer.create("Primary Samples - Connection", &instance->vkb.ctx,
 											 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
 												 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 												 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 											 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-											 config->num_mlt_threads * connect_path_rand_count * sizeof(PrimarySample));
+											 num_mlt_threads * connect_path_rand_count * sizeof(PrimarySample));
 
 	mlt_samplers_buffer.create("MLT Samplers", &instance->vkb.ctx,
 							   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							   config->num_mlt_threads * sizeof(MLTSampler));
+							   num_mlt_threads * sizeof(MLTSampler));
 
 	mlt_col_buffer.create("MLT Color Buffer", &instance->vkb.ctx,
 						  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -77,38 +81,38 @@ void PSSMLT::init() {
 							  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  config->num_mlt_threads * sizeof(ChainData));
+							  num_mlt_threads * sizeof(ChainData));
 
 	splat_buffer.create("Splat Buffer", &instance->vkb.ctx,
 						VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 							VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-						config->num_mlt_threads *
-							(config->path_length * (static_cast<unsigned long long>(config->path_length) + 1)) *
+						num_mlt_threads *
+							(config.path_length * (static_cast<unsigned long long>(config.path_length) + 1)) *
 							sizeof(Splat));
 
 	past_splat_buffer.create("Past Splats Buffer", &instance->vkb.ctx,
 							 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							 config->num_mlt_threads *
-								 (config->path_length * (static_cast<unsigned long long>(config->path_length) + 1)) *
+							 num_mlt_threads *
+								 (config.path_length * (static_cast<unsigned long long>(config.path_length) + 1)) *
 								 sizeof(Splat));
-	auto path_size = std::max(config->num_mlt_threads, config->num_bootstrap_samples);
+	auto path_size = std::max(num_mlt_threads, num_bootstrap_samples);
 	light_path_buffer.create("Light Paths", &instance->vkb.ctx,
 							 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							 path_size * (config->path_length + 1) * sizeof(MLTPathVertex));
+							 path_size * (config.path_length + 1) * sizeof(MLTPathVertex));
 
 	camera_path_buffer.create("Camera Paths", &instance->vkb.ctx,
 							  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  path_size * (config->path_length + 1) * sizeof(MLTPathVertex));
+							  path_size * (config.path_length + 1) * sizeof(MLTPathVertex));
 
 	int size = 0;
-	int arr_size = config->num_bootstrap_samples;
+	int arr_size = num_bootstrap_samples;
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -118,7 +122,7 @@ void PSSMLT::init() {
 	} while (arr_size > 1);
 	block_sums.resize(size);
 	int i = 0;
-	arr_size = config->num_bootstrap_samples;
+	arr_size = num_bootstrap_samples;
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -181,21 +185,25 @@ void PSSMLT::init() {
 	pc_ray.size_y = instance->height;
 
 	mutation_count =
-		int(instance->width * instance->height * config->mutations_per_pixel / float(config->num_mlt_threads));
-	pc_ray.mutations_per_pixel = config->mutations_per_pixel;
+		int(instance->width * instance->height * mutations_per_pixel / float(num_mlt_threads));
+	pc_ray.mutations_per_pixel = mutations_per_pixel;
 }
 
 void PSSMLT::render() {
+	const uint32_t num_bootstrap_samples = static_cast<uint32_t>(integrator_config["num_bootstrap_samples"]);
+	const uint32_t num_mlt_threads = static_cast<uint32_t>(integrator_config["num_mlt_threads"]);
+	const uint32_t mutations_per_pixel = static_cast<uint32_t>(integrator_config["mutations_per_pixel"]);
+
 	pc_ray.num_lights = int(lights.size());
 	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = config->path_length;
-	pc_ray.sky_col = config->sky_col;
+	pc_ray.max_depth = config.path_length;
+	pc_ray.sky_col = config.sky_col;
 	// PSSMLT related constants
 	pc_ray.light_rand_count = light_path_rand_count;
 	pc_ray.cam_rand_count = cam_path_rand_count;
 	pc_ray.connection_rand_count = connect_path_rand_count;
 	pc_ray.random_num = rand() % UINT_MAX;
-	pc_ray.num_bootstrap_samples = config->num_bootstrap_samples;
+	pc_ray.num_bootstrap_samples = num_bootstrap_samples;
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 
@@ -213,7 +221,7 @@ void PSSMLT::render() {
 															 {"src/shaders/ray.rchit"},
 															 {"src/shaders/ray.rahit"}},
 												 .specialization_data = {1},
-												 .dims = {(uint32_t)config->num_bootstrap_samples},
+												 .dims = {(uint32_t)num_bootstrap_samples},
 												 .accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)
 		.zero({light_path_buffer, camera_path_buffer})
@@ -223,12 +231,12 @@ void PSSMLT::render() {
 		.bind_tlas(instance->vkb.tlas);
 
 	int counter = 0;
-	prefix_scan(0, config->num_bootstrap_samples, counter, instance->vkb.rg.get());
+	prefix_scan(0, num_bootstrap_samples, counter, instance->vkb.rg.get());
 	// Calculate CDF
 	instance->vkb.rg
 		->add_compute("Calculate CDF",
 					  {.shader = Shader("src/shaders/integrators/pssmlt/calc_cdf.comp"),
-					   .dims = {(uint32_t)std::ceil(config->num_bootstrap_samples / float(1024.0f)), 1, 1}})
+					   .dims = {(uint32_t)std::ceil(num_bootstrap_samples / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
 		.bind(scene_desc_buffer);
 
@@ -271,7 +279,7 @@ void PSSMLT::render() {
 	// Select seeds
 	instance->vkb.rg
 		->add_compute("Select Seeds", {.shader = Shader("src/shaders/integrators/pssmlt/select_seeds.comp"),
-									   .dims = {(uint32_t)std::ceil(config->num_mlt_threads / float(1024.0f)), 1, 1}})
+									   .dims = {(uint32_t)std::ceil(num_mlt_threads / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
 		.bind(scene_desc_buffer);
 
@@ -282,7 +290,7 @@ void PSSMLT::render() {
 													 {"src/shaders/ray_shadow.rmiss"},
 													 {"src/shaders/ray.rchit"},
 													 {"src/shaders/ray.rahit"}},
-										 .dims = {(uint32_t)config->num_mlt_threads},
+										 .dims = {(uint32_t)num_mlt_threads},
 										 .accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)
 		.zero({light_path_buffer, camera_path_buffer})
@@ -303,7 +311,7 @@ void PSSMLT::render() {
 														 {"src/shaders/ray_shadow.rmiss"},
 														 {"src/shaders/ray.rchit"},
 														 {"src/shaders/ray.rahit"}},
-											 .dims = {(uint32_t)config->num_mlt_threads},
+											 .dims = {(uint32_t)num_mlt_threads},
 											 .accel = instance->vkb.tlas.accel})
 				.push_constants(&pc_ray)
 				.zero({light_path_buffer, camera_path_buffer})

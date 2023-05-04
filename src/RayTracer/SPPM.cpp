@@ -60,19 +60,21 @@ void SPPM::init() {
 }
 
 void SPPM::render() {
+	const float base_radius = static_cast<float>(integrator_config["base_radius"]);
+
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = int(lights.size());
 	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = config->path_length;
-	pc_ray.sky_col = config->sky_col;
+	pc_ray.max_depth = config.path_length;
+	pc_ray.sky_col = config.sky_col;
 	pc_ray.random_num = rand() % UINT_MAX;
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 	// PPM related constants
-	pc_ray.radius = config->base_radius;
+	pc_ray.radius = base_radius;
 	pc_ray.min_bounds = lumen_scene->m_dimensions.min;
 	pc_ray.max_bounds = lumen_scene->m_dimensions.max;
-	pc_ray.ppm_base_radius = config->base_radius;
+	pc_ray.ppm_base_radius = base_radius;
 	const glm::vec3 diam = pc_ray.max_bounds - pc_ray.min_bounds;
 	const float max_comp = glm::max(diam.x, glm::max(diam.y, diam.z));
 	const int base_grid_res = int(max_comp / pc_ray.radius);

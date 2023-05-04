@@ -1,9 +1,19 @@
 #pragma once
 #include "Integrator.h"
+#include "SceneConfig.h"
+
+struct SMLTConfig : SceneConfig {
+	float mutations_per_pixel = 100.0f;
+	int num_mlt_threads = 360000;
+	int num_bootstrap_samples = 360000;
+	float radius_factor = 0.025f;
+	SMLTConfig() : SceneConfig("SMLT") {}
+};
+
 class SMLT : public Integrator {
    public:
 	SMLT(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), SMLTConfig)) {}
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool update() override;
@@ -46,5 +56,6 @@ class SMLT : public Integrator {
 	int light_path_rand_count;
 	int cam_path_rand_count;
 
-	SMLTConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;
 };

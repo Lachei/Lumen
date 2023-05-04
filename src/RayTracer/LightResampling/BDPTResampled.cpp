@@ -1,21 +1,21 @@
-#include "../LumenPCH.h"
-#include "BDPT_resampled.h"
+#include "../../LumenPCH.h"
+#include "BDPTResampled.h"
 
-void BDPT_resampled::init() {
+void BDPTResampled::init() {
 	Integrator::init();
 	light_path_buffer.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-		instance->width * instance->height * (lumen_scene->config->path_length + 1) * sizeof(PathVertex));
+		instance->width * instance->height * (config.path_length + 1) * sizeof(PathVertex));
 
 	camera_path_buffer.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-		instance->width * instance->height * (lumen_scene->config->path_length + 1) * sizeof(PathVertex));
+		instance->width * instance->height * (config.path_length + 1) * sizeof(PathVertex));
 
 	color_storage_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -45,16 +45,16 @@ void BDPT_resampled::init() {
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, color_storage_addr, &color_storage_buffer, instance->vkb.rg);
 }
 
-void BDPT_resampled::render() {
+void BDPTResampled::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = (int)lights.size();
 	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = lumen_scene->config->path_length;
-	pc_ray.sky_col = lumen_scene->config->sky_col;
+	pc_ray.max_depth = config.path_length;
+	pc_ray.sky_col = config.sky_col;
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 	instance->vkb.rg
-		->add_rt("BDPT",
+		->add_rt("BDPTResampled",
 				 {
 
 					 .shaders = {{"src/shaders/integrators/bdpt/bdpt.rgen"},
@@ -83,7 +83,7 @@ void BDPT_resampled::render() {
 	instance->vkb.rg->run_and_submit(cmd);
 }
 
-bool BDPT_resampled::update() {
+bool BDPTResampled::update() {
 	pc_ray.frame_num++;
 	bool updated = Integrator::update();
 	if (updated) {
@@ -92,7 +92,7 @@ bool BDPT_resampled::update() {
 	return updated;
 }
 
-void BDPT_resampled::destroy() {
+void BDPTResampled::destroy() {
 	const auto device = instance->vkb.ctx.device;
 	Integrator::destroy();
 	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer};

@@ -3,6 +3,7 @@
 #include "Framework/LumenInstance.h"
 #include "Framework/ImageUtils.h"
 #include "PostFX.h"
+#include "Integrator.h"
 
 class RayTracer : public LumenInstance {
    public:

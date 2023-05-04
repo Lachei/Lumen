@@ -9,6 +9,8 @@
 #include "ReSTIR.h"
 #include "ReSTIRGI.h"
 #include "DDGI.h"
+#include "LightResampling/BDPTResampled.h"
+#include "LightResampling/VCMResampled.h"
 
 std::map<std::string_view, IntegratorRegistry::Entry> IntegratorRegistry::integrators{};
 
@@ -22,3 +24,5 @@ REGISTER(VCMMLT);
 REGISTER(ReSTIR);
 REGISTER(ReSTIRGI);
 REGISTER(DDGI);
+REGISTER(BDPTResampled);
+REGISTER(VCMResampled);

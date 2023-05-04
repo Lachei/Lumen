@@ -1,9 +1,18 @@
 #pragma once
 #include "Integrator.h"
+#include "SceneConfig.h"
+
+struct PSSMLTConfig : SceneConfig {
+	float mutations_per_pixel = 100.0f;
+	int num_mlt_threads = 360000;
+	int num_bootstrap_samples = 360000;
+	PSSMLTConfig() : SceneConfig("PSSMLT") {}
+};
+
 class PSSMLT : public Integrator {
    public:
 	PSSMLT(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), PSSMLTConfig)) {}
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool update() override;
@@ -39,5 +48,6 @@ class PSSMLT : public Integrator {
 	int cam_path_rand_count;
 	int connect_path_rand_count;
 
-	PSSMLTConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;;
 };

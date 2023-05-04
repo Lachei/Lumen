@@ -1,6 +1,7 @@
 #pragma once
 #include "../LumenPCH.h"
 #include <tiny_obj_loader.h>
+#include <tinygltf/json.hpp>
 #include "shaders/commons.h"
 #include "Framework/MitsubaParser.h"
 #include "SceneConfig.h"
@@ -49,10 +50,10 @@ class LumenScene {
 		glm::vec3 center{0.f};
 		float radius{0};
 	} m_dimensions;
-	std::unique_ptr<SceneConfig> config;
+	nlohmann::json integrator_config;
+	SceneConfig config;
 
 	uint32_t dir_light_idx = -1;
-	void create_scene_config(const std::string& integrator_name);
 
    private:
 	void compute_scene_dimensions();

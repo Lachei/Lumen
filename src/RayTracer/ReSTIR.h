@@ -1,9 +1,15 @@
 #pragma once
 #include "Integrator.h"
+#include "SceneConfig.h"
+
+struct ReSTIRConfig : SceneConfig {
+	ReSTIRConfig() : SceneConfig("ReSTIR") {}
+};
+
 class ReSTIR : public Integrator {
    public:
 	ReSTIR(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), ReSTIRConfig)) {}
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool update() override;
@@ -21,5 +27,6 @@ class ReSTIR : public Integrator {
 	VkDescriptorSet desc_set;
 
 	bool do_spatiotemporal = false;
-	ReSTIRConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;
 };

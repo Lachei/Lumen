@@ -1,9 +1,22 @@
 #pragma once
 #include "Integrator.h"
+#include "SceneConfig.h"
+
+struct VCMMLTConfig : SceneConfig {
+	float mutations_per_pixel = 100.0f;
+	int num_mlt_threads = 360000;
+	int num_bootstrap_samples = 360000;
+	float radius_factor = 0.025f;
+	bool enable_vm = false;
+	bool alternate = true;
+	bool light_first = false;
+	VCMMLTConfig() : SceneConfig("VCMMLT") {}
+};
+
 class VCMMLT : public Integrator {
    public:
 	VCMMLT(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), VCMMLTConfig)) {}
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool gui() override;
@@ -40,5 +53,6 @@ class VCMMLT : public Integrator {
 	int light_path_rand_count;
 	int sample_cnt = 0;
 
-	VCMMLTConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;
 };

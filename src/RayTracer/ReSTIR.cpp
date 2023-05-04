@@ -69,8 +69,8 @@ void ReSTIR::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = (int)lights.size();
 	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = config->path_length;
-	pc_ray.sky_col = config->sky_col;
+	pc_ray.max_depth = config.path_length;
+	pc_ray.sky_col = config.sky_col;
 	pc_ray.do_spatiotemporal = do_spatiotemporal;
 	pc_ray.random_num = rand() % UINT_MAX;
 	pc_ray.total_light_area = total_light_area;

@@ -8,6 +8,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "RayTracer.h"
 #include <string.h>
+#include <ranges>
 #include "IntegratorRegistry.h"
 
 RayTracer* RayTracer::instance = nullptr;
@@ -56,7 +57,7 @@ void RayTracer::init(Window* window) {
 	// so this is turned off and pipeline barriers are used instead
 	vkb.rg->settings.use_events = use_events;
 
-	create_integrator(int(scene.config->integrator_type));
+	create_integrator(scene.config.integrator_name);
 	integrator->init();
 	post_fx.init(*instance);
 	init_resources();
@@ -181,6 +182,34 @@ void RayTracer::render(uint32_t i) {
 }
 
 void RayTracer::create_integrator(std::string_view integrator_id) {
+	if(!IntegratorRegistry::integrators.contains(integrator_id)){
+		// check for lower case match
+		bool match{};
+		for(const auto& [id, entry]: IntegratorRegistry::integrators){
+			if(id.size() != integrator_id.size())
+				continue;
+			bool char_wrong{false};
+			for(int i: std::ranges::iota_view(0, static_cast<int>(id.size())))
+				char_wrong |= std::tolower(id[i]) != std::tolower(integrator_id[i]);
+			if(!char_wrong){
+				match = true;
+				integrator_id = id;
+				break;
+			}
+		}
+
+		if(!match){
+			std::string report_string = std::string("Integrator ") + integrator_id.data() + " can not be found, using standard Path tracer.\nAvailable options are:\n";
+			for(const auto& [id, entry]: IntegratorRegistry::integrators){
+				report_string += "    ";
+				report_string += id;
+				report_string += "\n";
+			}
+			LUMEN_WARN(report_string);
+			integrator_id = "Path";
+		}
+	}
+
 	integrator = IntegratorRegistry::integrators[integrator_id].create(this, &scene);
 }
 
@@ -203,12 +232,12 @@ bool RayTracer::gui() {
 	}
 
 	bool integrator_changed{};
-	if (ImGui::BeginCombo("Select Integrator", scene.config->integrator_name.c_str())) {
+	if (ImGui::BeginCombo("Select Integrator", scene.config.integrator_name.c_str())) {
 		for (auto& [integrator_type, entry]: IntegratorRegistry::integrators) {
-			const bool selected = integrator_type == scene.config->integrator_name;
+			const bool selected = integrator_type == scene.config.integrator_name;
 			if (ImGui::Selectable(integrator_type.data())) {
-				integrator_changed = scene.config->integrator_name != integrator_type;
-				scene.config->integrator_name = std::string(integrator_type);
+				integrator_changed = scene.config.integrator_name != integrator_type;
+				scene.config.integrator_name = std::string(integrator_type);
 			}
 
 			// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
@@ -219,7 +248,7 @@ bool RayTracer::gui() {
 		ImGui::EndCombo();
 	}
 
-	if (curr_integrator_idx != int(scene.config->integrator_type)) {
+	if (integrator_changed) {
 		updated = true;
 		vkDeviceWaitIdle(vkb.ctx.device);
 		integrator->destroy();
@@ -230,10 +259,10 @@ bool RayTracer::gui() {
 		REGISTER_BUFFER_WITH_ADDRESS(RTUtilsDesc, desc, counter_addr, &counter_buffer, instance->vkb.rg);
 		REGISTER_BUFFER_WITH_ADDRESS(RTUtilsDesc, desc, rmse_val_addr, &rmse_val_buffer, instance->vkb.rg);
 
-		auto prev_cam_settings = scene.config->cam_settings;
-		scene.create_scene_config(std::string(settings[curr_integrator_idx]));
-		scene.config->cam_settings = prev_cam_settings;
-		create_integrator(curr_integrator_idx);
+		//auto prev_cam_settings = scene.config.cam_settings;
+		//scene.create_scene_config(std::string(settings[curr_integrator_idx]));
+		//scene.config.cam_settings = prev_cam_settings;
+		create_integrator(scene.config.integrator_name);
 		integrator->init();
 		post_fx.init(*instance);
 	}

@@ -1,9 +1,16 @@
 #pragma once
-#include "Integrator.h"
-class VCM : public Integrator {
+#include "../Integrator.h"
+
+struct VCMResampledConfig : SceneConfig {
+	float radius_factor = 0.025f;
+	bool enable_vm = false;
+	VCMResampledConfig() : SceneConfig("VCMResampled") {}
+};
+
+class VCMResampled : public Integrator {
    public:
-	VCM(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), VCMConfig)) {}
+	VCMResampled(LumenInstance* scene, LumenScene* lumen_scene)
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool update() override;
@@ -28,5 +35,6 @@ class VCM : public Integrator {
 	bool do_spatiotemporal = false;
 	uint32_t total_frame_cnt = 0;
 
-	VCMConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;
 };

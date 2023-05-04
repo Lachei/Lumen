@@ -5,30 +5,35 @@ static float vcm_radius_factor = 0.025f;
 static bool light_first = false;
 void VCMMLT::init() {
 	Integrator::init();
+
+	const size_t mutations_per_pixel = integrator_config["mutatoins_per_pixel"];
+	const size_t num_mlt_threads = integrator_config["num_mlt_threads"];
+	const size_t num_bootstrap_samples = integrator_config["num_bootstrap_samples"];
+
 	mutation_count =
-		int(instance->width * instance->height * config->mutations_per_pixel / float(config->num_mlt_threads));
-	light_path_rand_count = std::max(7 + 2 * config->path_length, 3 + 6 * config->path_length);
+		int(instance->width * instance->height * mutations_per_pixel / float(num_mlt_threads));
+	light_path_rand_count = std::max(7 + 2 * config.path_length, 3 + 6 * config.path_length);
 
 	// MLTVCM buffers
 	bootstrap_buffer.create(&instance->vkb.ctx,
 							VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 							VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							config->num_bootstrap_samples * sizeof(BootstrapSample));
+							num_bootstrap_samples * sizeof(BootstrapSample));
 
 	cdf_buffer.create(&instance->vkb.ctx,
 					  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 						  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 					  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-					  config->num_bootstrap_samples * 4);
+					  num_bootstrap_samples * 4);
 
 	bootstrap_cpu.create(&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 						 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						 VK_SHARING_MODE_EXCLUSIVE, config->num_bootstrap_samples * sizeof(BootstrapSample));
+						 VK_SHARING_MODE_EXCLUSIVE, num_bootstrap_samples * sizeof(BootstrapSample));
 
 	cdf_cpu.create(&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				   VK_SHARING_MODE_EXCLUSIVE, config->num_bootstrap_samples * 4);
+				   VK_SHARING_MODE_EXCLUSIVE, num_bootstrap_samples * 4);
 
 	cdf_sum_buffer.create(&instance->vkb.ctx,
 						  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -39,19 +44,19 @@ void VCMMLT::init() {
 						VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 							VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-						config->num_mlt_threads * sizeof(VCMMLTSeedData));
+						num_mlt_threads * sizeof(VCMMLTSeedData));
 
 	light_primary_samples_buffer.create(&instance->vkb.ctx,
 										VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 											VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 										VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-										config->num_mlt_threads * light_path_rand_count * sizeof(PrimarySample) * 2);
+										num_mlt_threads * light_path_rand_count * sizeof(PrimarySample) * 2);
 
 	mlt_samplers_buffer.create(&instance->vkb.ctx,
 							   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							   config->num_mlt_threads * sizeof(VCMMLTSampler) * 2);
+							   num_mlt_threads * sizeof(VCMMLTSampler) * 2);
 
 	mlt_col_buffer.create(&instance->vkb.ctx,
 						  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -69,19 +74,19 @@ void VCMMLT::init() {
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-		config->num_mlt_threads * (config->path_length * (config->path_length + 1)) * sizeof(Splat) * 2);
+		num_mlt_threads * (config.path_length * (config.path_length + 1)) * sizeof(Splat) * 2);
 
 	past_splat_buffer.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-		config->num_mlt_threads * (config->path_length * (config->path_length + 1)) * sizeof(Splat) * 2);
+		num_mlt_threads * (config.path_length * (config.path_length + 1)) * sizeof(Splat) * 2);
 
 	light_path_buffer.create(&instance->vkb.ctx,
 							 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							 instance->width * instance->height * (config->path_length + 1) * sizeof(VCMVertex));
+							 instance->width * instance->height * (config.path_length + 1) * sizeof(VCMVertex));
 
 	light_path_cnt_buffer.create(&instance->vkb.ctx,
 								 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -104,13 +109,13 @@ void VCMMLT::init() {
 								VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 									VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 								VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-								config->num_mlt_threads * sizeof(SumData) * 2);
+								num_mlt_threads * sizeof(SumData) * 2);
 
 	mlt_residual_buffer.create(&instance->vkb.ctx,
 							   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 								   VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							   config->num_mlt_threads * sizeof(SumData));
+							   num_mlt_threads * sizeof(SumData));
 
 	counter_buffer.create(&instance->vkb.ctx,
 						  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
@@ -118,7 +123,7 @@ void VCMMLT::init() {
 						  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, sizeof(int));
 
 	int size = 0;
-	int arr_size = config->num_bootstrap_samples;
+	int arr_size = num_bootstrap_samples;
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -128,7 +133,7 @@ void VCMMLT::init() {
 	} while (arr_size > 1);
 	block_sums.resize(size);
 	int i = 0;
-	arr_size = config->num_bootstrap_samples;
+	arr_size = num_bootstrap_samples;
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -196,12 +201,17 @@ void VCMMLT::init() {
 	pc_ray.frame_num = 0;
 	pc_ray.size_x = instance->width;
 	pc_ray.size_y = instance->height;
-	pc_ray.mutations_per_pixel = config->mutations_per_pixel;
-	pc_ray.num_mlt_threads = config->num_mlt_threads;
+	pc_ray.mutations_per_pixel = mutations_per_pixel;
+	pc_ray.num_mlt_threads = num_mlt_threads;
 }
 
 void VCMMLT::render() {
 	LUMEN_TRACE("Rendering sample {}...", sample_cnt++);
+
+	const size_t mutations_per_pixel = integrator_config["mutatoins_per_pixel"];
+	const size_t num_mlt_threads = integrator_config["num_mlt_threads"];
+	const size_t num_bootstrap_samples = integrator_config["num_bootstrap_samples"];
+
 	const float ppm_base_radius = 0.25f;
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	VkClearValue clear_color = {0.25f, 0.25f, 0.25f, 1.0f};
@@ -210,13 +220,13 @@ void VCMMLT::render() {
 	VkClearValue clear_values[] = {clear_color, clear_depth};
 	pc_ray.num_lights = int(lights.size());
 	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = config->path_length;
-	pc_ray.sky_col = config->sky_col;
+	pc_ray.max_depth = config.path_length;
+	pc_ray.sky_col = config.sky_col;
 	// VCMMLT related constants
 	pc_ray.use_vm = use_vm;
 	pc_ray.light_rand_count = light_path_rand_count;
 	pc_ray.random_num = rand() % UINT_MAX;
-	pc_ray.num_bootstrap_samples = config->num_bootstrap_samples;
+	pc_ray.num_bootstrap_samples = num_bootstrap_samples;
 	pc_ray.radius = lumen_scene->m_dimensions.radius * vcm_radius_factor / 100.f;
 	pc_ray.radius /= (float)pow((double)pc_ray.frame_num + 1, 0.5 * (1 - 2.0 / 3));
 	pc_ray.min_bounds = lumen_scene->m_dimensions.min;
@@ -239,7 +249,7 @@ void VCMMLT::render() {
 	};
 	auto op_reduce = [&](const std::string& op_name, const std::string& op_shader_name, const std::string& reduce_name,
 						 const std::string& reduce_shader_name, const std::vector<uint32_t> spec_data) {
-		uint32_t num_wgs = uint32_t((config->num_mlt_threads + 1023) / 1024);
+		uint32_t num_wgs = uint32_t((num_mlt_threads + 1023) / 1024);
 		instance->vkb.rg
 			->add_compute(op_name,
 						  {.shader = Shader(op_shader_name), .specialization_data = spec_data, .dims = {num_wgs, 1, 1}})
@@ -301,7 +311,7 @@ void VCMMLT::render() {
 											 {"src/shaders/ray.rchit"},
 											 {"src/shaders/ray.rahit"}},
 								 .specialization_data = spec_consts,
-								 .dims = {(uint32_t)config->num_bootstrap_samples},
+								 .dims = {(uint32_t)num_bootstrap_samples},
 								 .accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)
 		.bind(rt_bindings)
@@ -309,18 +319,18 @@ void VCMMLT::render() {
 		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 	int counter = 0;
-	prefix_scan(0, config->num_bootstrap_samples, counter, instance->vkb.rg.get());
+	prefix_scan(0, num_bootstrap_samples, counter, instance->vkb.rg.get());
 	// Calculate CDF
 	instance->vkb.rg
 		->add_compute("Calculate CDF",
 					  {.shader = Shader("src/shaders/integrators/pssmlt/calc_cdf.comp"),
-					   .dims = {(uint32_t)std::ceil(config->num_bootstrap_samples / float(1024.0f)), 1, 1}})
+					   .dims = {(uint32_t)std::ceil(num_bootstrap_samples / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
 		.bind(scene_desc_buffer);
 	// Select seeds
 	instance->vkb.rg
 		->add_compute("Select Seeds", {.shader = Shader("src/shaders/integrators/vcmmlt/select_seeds.comp"),
-									   .dims = {(uint32_t)std::ceil(config->num_mlt_threads / float(1024.0f)), 1, 1}})
+									   .dims = {(uint32_t)std::ceil(num_mlt_threads / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
 		.bind(scene_desc_buffer);
 	// Fill in the samplers for mutations
@@ -334,7 +344,7 @@ void VCMMLT::render() {
 												 {"src/shaders/ray.rchit"},
 												 {"src/shaders/ray.rahit"}},
 									 .specialization_data = spec_consts,
-									 .dims = {(uint32_t)config->num_mlt_threads},
+									 .dims = {(uint32_t)num_mlt_threads},
 									 .accel = instance->vkb.tlas.accel})
 			.push_constants(&pc_ray)
 			.bind(rt_bindings)
@@ -364,7 +374,7 @@ void VCMMLT::render() {
 													 {"src/shaders/ray_shadow.rmiss"},
 													 {"src/shaders/ray.rchit"},
 													 {"src/shaders/ray.rahit"}},
-										 .dims = {(uint32_t)config->num_mlt_threads},
+										 .dims = {(uint32_t)num_mlt_threads},
 										 .accel = instance->vkb.tlas.accel})
 				.push_constants(&pc_ray)
 				.zero(mlt_atomicsum_buffer)

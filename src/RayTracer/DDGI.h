@@ -1,9 +1,15 @@
 #pragma once
 #include "Integrator.h"
+#include "SceneConfig.h"
+
+struct DDGIConfig : SceneConfig {
+	DDGIConfig() : SceneConfig("DDG") {}
+};
+
 class DDGI : public Integrator {
    public:
 	DDGI(LumenInstance* scene, LumenScene* lumen_scene)
-		: Integrator(scene, lumen_scene), config(CAST_CONFIG(lumen_scene->config.get(), DDGIConfig)) {}
+		: Integrator(scene, lumen_scene), config(lumen_scene->config), integrator_config(lumen_scene->integrator_config) {}
 	virtual void init() override;
 	virtual void render() override;
 	virtual bool update() override;
@@ -51,5 +57,6 @@ class DDGI : public Integrator {
 	uint32_t frame_idx = 0;
 	uint total_frame_idx = 0;
 
-	DDGIConfig* config;
+	SceneConfig& config;
+	nlohmann::json integrator_config;
 };
