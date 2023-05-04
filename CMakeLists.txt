@@ -55,6 +55,9 @@ endif()
 
 add_compile_definitions(TINYEXR_USE_MINIZ)  # enables usage of miniz for opening exr images
 add_compile_definitions(USE_SHADERC)        # enables shader compilation via shaderc
+if(UNIX)
+    add_compile_options(-Wno-deprecated)
+endif()
 add_executable(Lumen ${src_files} ${shaders_src})
 if(WIN32)
     target_link_libraries(Lumen PRIVATE Vulkan::Vulkan glfw volk shaderc_shared glm

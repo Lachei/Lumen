@@ -156,7 +156,7 @@ void SPPM::render() {
 					  {.shader = Shader("src/shaders/integrators/sppm/composite.comp"),
 					   .dims = {(uint32_t)std::ceil(instance->width * instance->height / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
-		.bind({output_tex, scene_desc_buffer});
+		.bind(std::initializer_list<ResourceBinding>{output_tex, scene_desc_buffer});
 	instance->vkb.rg->run_and_submit(cmd);
 }
 

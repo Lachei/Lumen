@@ -541,6 +541,14 @@ struct SelectedReservoirs {
 	vec3 dir;
 };
 
+struct LightResampleReservoir{
+	float w_sum;
+	float w;
+	uint m;
+	vec3 pos;
+	vec3 dir;
+};
+
 struct LightState {
 	vec3 pos;
 	float triangle_pdf;
@@ -629,11 +637,15 @@ struct SceneDesc {
 	uint64_t light_state_addr;
 	uint64_t angle_struct_addr;
 	uint64_t avg_addr;
+
 	// DDGI
 	uint64_t probe_radiance_addr;
 	uint64_t probe_dir_depth_addr;
 	uint64_t direct_lighting_addr;
 	uint64_t probe_offsets_addr;
+
+	// BDPT Ressampled
+	uint64_t global_light_reservoirs_addr;
 };
 
 struct Desc2 {

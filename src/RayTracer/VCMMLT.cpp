@@ -272,12 +272,12 @@ void VCMMLT::render() {
 		op_reduce("OpReduce: Sum1", "src/shaders/integrators/vcmmlt/sum.comp", "OpReduce: Reduce Sum1",
 				  "src/shaders/integrators/vcmmlt/reduce_sum.comp", {1});
 	};
-	std::initializer_list<ResourceBinding> rt_bindings = {
+	std::vector<ResourceBinding> rt_bindings = {
 		output_tex,
 		scene_ubo_buffer,
 		scene_desc_buffer,
 	};
-	std::initializer_list<uint32_t> spec_consts;
+	std::vector<uint32_t> spec_consts;
 	if (!light_first) {
 		spec_consts = {1, 0};
 	} else {
@@ -418,7 +418,7 @@ void VCMMLT::render() {
 					  {.shader = Shader("src/shaders/integrators/vcmmlt/composite.comp"),
 					   .dims = {(uint32_t)std::ceil(instance->width * instance->height / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
-		.bind({output_tex, scene_desc_buffer});
+		.bind(std::initializer_list<ResourceBinding>{output_tex, scene_desc_buffer});
 }
 
 bool VCMMLT::gui() {

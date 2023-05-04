@@ -137,7 +137,7 @@ void ReSTIRGI::render() {
 					  {.shader = Shader("src/shaders/integrators/restir/gi/output.comp"),
 					   .dims = {(uint32_t)std::ceil(instance->width * instance->height / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
-		.bind({output_tex, scene_desc_buffer});
+		.bind(std::initializer_list<ResourceBinding>{output_tex, scene_desc_buffer});
 	if (!do_spatiotemporal) {
 		do_spatiotemporal = true;
 	}

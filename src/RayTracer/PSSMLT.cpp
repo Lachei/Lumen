@@ -207,7 +207,7 @@ void PSSMLT::render() {
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 
-	std::initializer_list<ResourceBinding> rt_bindings = {
+	std::vector<ResourceBinding> rt_bindings = {
 		output_tex,
 		scene_ubo_buffer,
 		scene_desc_buffer,
@@ -349,7 +349,7 @@ void PSSMLT::render() {
 					  {.shader = Shader("src/shaders/integrators/pssmlt/composite.comp"),
 					   .dims = {(uint32_t)std::ceil(instance->width * instance->height / float(1024.0f)), 1, 1}})
 		.push_constants(&pc_ray)
-		.bind({output_tex, scene_desc_buffer});
+		.bind(std::initializer_list<ResourceBinding>{output_tex, scene_desc_buffer});
 }
 
 bool PSSMLT::update() {

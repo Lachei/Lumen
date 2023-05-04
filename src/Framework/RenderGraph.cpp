@@ -299,7 +299,7 @@ RenderPass& RenderPass::bind(const ResourceBinding& binding) {
 	return *this;
 }
 
-RenderPass& RenderPass::bind(std::initializer_list<ResourceBinding> bindings) {
+RenderPass& RenderPass::bind(std::span<const ResourceBinding> bindings) {
 	for (auto& binding : bindings) {
 		bind(binding);
 	}

@@ -40,7 +40,7 @@ void Path::render() {
 						  .dims = {instance->width, instance->height},
 						  .accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			scene_ubo_buffer,
 			scene_desc_buffer,

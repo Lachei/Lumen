@@ -20,6 +20,14 @@ void BDPTResampled::init() {
 	color_storage_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, instance->width * instance->height * 3 * 4);
+
+	global_light_reservoir_buffer.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			instance->width * instance->height * sizeof(LightResampleReservoir));
+
 	SceneDesc desc;
 	desc.vertex_addr = vertex_buffer.get_device_address();
 	desc.index_addr = index_buffer.get_device_address();
@@ -31,6 +39,7 @@ void BDPTResampled::init() {
 	desc.light_path_addr = light_path_buffer.get_device_address();
 	desc.camera_path_addr = camera_path_buffer.get_device_address();
 	desc.color_storage_addr = color_storage_buffer.get_device_address();
+	desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
 
 	scene_desc_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -43,6 +52,7 @@ void BDPTResampled::init() {
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, light_path_addr, &light_path_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, camera_path_addr, &camera_path_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, color_storage_addr, &color_storage_buffer, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, global_light_reservoirs_addr, &global_light_reservoir_buffer, instance->vkb.rg);
 }
 
 void BDPTResampled::render() {
@@ -57,7 +67,7 @@ void BDPTResampled::render() {
 		->add_rt("BDPTResampled",
 				 {
 
-					 .shaders = {{"src/shaders/integrators/bdpt/bdpt.rgen"},
+					 .shaders = {{"src/shaders/integrators/bdpt/bdpt_resample.rgen"},
 								 {"src/shaders/ray.rmiss"},
 								 {"src/shaders/ray_shadow.rmiss"},
 								 {"src/shaders/ray.rchit"},
@@ -70,7 +80,7 @@ void BDPTResampled::render() {
 		//.read(camera_path_buffer)
 		.push_constants(&pc_ray)
 		//.write(output_tex)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			scene_ubo_buffer,
 			scene_desc_buffer,

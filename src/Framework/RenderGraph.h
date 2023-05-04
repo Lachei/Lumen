@@ -6,6 +6,7 @@
 #include "Texture.h"
 #include "EventPool.h"
 #include "RenderGraphTypes.h"
+#include <span>
 
 #define TO_STR(V) (#V)
 
@@ -129,7 +130,7 @@ class RenderPass {
 
 	RenderPass& bind(const ResourceBinding& binding);
 	RenderPass& bind(Texture2D& tex, VkSampler sampler);
-	RenderPass& bind(std::initializer_list<ResourceBinding> bindings);
+	RenderPass& bind(std::span<const ResourceBinding> bindings);
 	RenderPass& bind_texture_array(std::vector<Texture2D>& texes);
 	RenderPass& bind_buffer_array(std::vector<Buffer>& buffers);
 	RenderPass& bind_tlas(const AccelKHR& tlas);

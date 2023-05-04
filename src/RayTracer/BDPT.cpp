@@ -70,7 +70,7 @@ void BDPT::render() {
 		//.read(camera_path_buffer)
 		.push_constants(&pc_ray)
 		//.write(output_tex)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			scene_ubo_buffer,
 			scene_desc_buffer,

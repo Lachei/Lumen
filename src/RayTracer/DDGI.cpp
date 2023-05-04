@@ -181,7 +181,7 @@ void DDGI::render() {
 										.accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)
 		.bind(rt_bindings)
-		.bind({mesh_lights_buffer, ddgi_ubo_buffer, rt.radiance_tex, rt.dir_depth_tex})
+		.bind(std::initializer_list<ResourceBinding>{mesh_lights_buffer, ddgi_ubo_buffer, rt.radiance_tex, rt.dir_depth_tex})
 		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 	// Classify
@@ -190,7 +190,7 @@ void DDGI::render() {
 		->add_compute("Classify Probes",
 					  {.shader = Shader("src/shaders/integrators/ddgi/classify.comp"), .dims = {wg_x}})
 		.push_constants(&pc_ray)
-		.bind({scene_ubo_buffer, scene_desc_buffer, ddgi_ubo_buffer, rt.radiance_tex, rt.dir_depth_tex});
+		.bind(std::initializer_list<ResourceBinding>{scene_ubo_buffer, scene_desc_buffer, ddgi_ubo_buffer, rt.radiance_tex, rt.dir_depth_tex});
 	// Update probes & borders
 	{
 		// Probes
@@ -203,7 +203,7 @@ void DDGI::render() {
 													   : "src/shaders/integrators/ddgi/update_depth.comp"),
 							   .dims = {wg_x, wg_y}})
 				.push_constants(&pc_ray)
-				.bind({scene_desc_buffer, irr_texes[!ping_pong], depth_texes[!ping_pong], irr_texes[ping_pong],
+				.bind(std::initializer_list<ResourceBinding>{scene_desc_buffer, irr_texes[!ping_pong], depth_texes[!ping_pong], irr_texes[ping_pong],
 					   depth_texes[ping_pong], ddgi_ubo_buffer, rt.radiance_tex, rt.dir_depth_tex});
 		};
 		update_probe(true);
@@ -215,7 +215,7 @@ void DDGI::render() {
 			->add_compute("Update Borders",
 						  {.shader = Shader("src/shaders/integrators/ddgi/update_borders.comp"), .dims = {wg_x}})
 			.push_constants(&pc_ray)
-			.bind({irr_texes[!ping_pong], depth_texes[!ping_pong], ddgi_ubo_buffer});
+			.bind(std::initializer_list<ResourceBinding>{irr_texes[!ping_pong], depth_texes[!ping_pong], ddgi_ubo_buffer});
 	}
 	// Sample probes & output into texture
 	wg_x = (instance->width + 31) / 32;
@@ -224,7 +224,7 @@ void DDGI::render() {
 		->add_compute("Sample Probes",
 					  {.shader = Shader("src/shaders/integrators/ddgi/sample.comp"), .dims = {wg_x, wg_y}})
 		.push_constants(&pc_ray)
-		.bind({scene_ubo_buffer, scene_desc_buffer, output.tex, irr_texes[ping_pong], depth_texes[ping_pong],
+		.bind(std::initializer_list<ResourceBinding>{scene_ubo_buffer, scene_desc_buffer, output.tex, irr_texes[ping_pong], depth_texes[ping_pong],
 			   ddgi_ubo_buffer});
 	// Relocate
 	if (total_frame_idx < 5) {
@@ -233,7 +233,7 @@ void DDGI::render() {
 		instance->vkb.rg
 			->add_compute("Relocate", {.shader = Shader("src/shaders/integrators/ddgi/relocate.comp"), .dims = {wg_x}})
 			.push_constants(&pc_ray)
-			.bind({scene_ubo_buffer, scene_desc_buffer, ddgi_ubo_buffer, rt.dir_depth_tex});
+			.bind(std::initializer_list<ResourceBinding>{scene_ubo_buffer, scene_desc_buffer, ddgi_ubo_buffer, rt.dir_depth_tex});
 	}
 	// Output
 	wg_x = (instance->width + 31) / 32;
@@ -241,7 +241,7 @@ void DDGI::render() {
 	instance->vkb.rg
 		->add_compute("DDGI Output", {.shader = Shader("src/shaders/integrators/ddgi/out.comp"), .dims = {wg_x, wg_y}})
 		.push_constants(&pc_ray)
-		.bind({output_tex, scene_ubo_buffer, scene_desc_buffer, output.tex});
+		.bind(std::initializer_list<ResourceBinding>{output_tex, scene_ubo_buffer, scene_desc_buffer, output.tex});
 	frame_idx++;
 	total_frame_idx++;
 	first_frame = false;
