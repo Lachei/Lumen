@@ -84,8 +84,13 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     light_pdf *= float(reservoir.m) * reservoir.w / reservoir.w_sum;
 }
 
-void add_light_to_temporal(){
-    
+
+// loads the temporal reservoir and add the current light starting point to the temporal
+// reservoir for future reuse
+void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
+    LightResampleReservoir reservoir = light_resampled_reservoirs.d[pixel_idx];
+    reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
+    light_resampled_reservoirs.d[pixel_idx] = reservoir;
 }
 
 // might have to be switched to compute shader to support proper
@@ -196,4 +201,7 @@ void main() {
     } else {
         imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
     }
+
+    // updating the temporal reservoirs
+    add_light_to_temporal(luminance(col), light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s);
 }
