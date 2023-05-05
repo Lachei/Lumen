@@ -112,7 +112,7 @@ void PSSMLT::init() {
 							  path_size * (config.path_length + 1) * sizeof(MLTPathVertex));
 
 	int size = 0;
-	int arr_size = num_bootstrap_samples;
+	int arr_size = static_cast<int>(num_bootstrap_samples);
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -122,7 +122,7 @@ void PSSMLT::init() {
 	} while (arr_size > 1);
 	block_sums.resize(size);
 	int i = 0;
-	arr_size = num_bootstrap_samples;
+	arr_size = static_cast<int>(num_bootstrap_samples);
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -186,7 +186,7 @@ void PSSMLT::init() {
 
 	mutation_count =
 		int(instance->width * instance->height * mutations_per_pixel / float(num_mlt_threads));
-	pc_ray.mutations_per_pixel = mutations_per_pixel;
+	pc_ray.mutations_per_pixel = static_cast<float>(mutations_per_pixel);
 }
 
 void PSSMLT::render() {

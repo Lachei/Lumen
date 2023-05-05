@@ -123,7 +123,7 @@ void VCMMLT::init() {
 						  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, sizeof(int));
 
 	int size = 0;
-	int arr_size = num_bootstrap_samples;
+	int arr_size = static_cast<int>(num_bootstrap_samples);
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -133,7 +133,7 @@ void VCMMLT::init() {
 	} while (arr_size > 1);
 	block_sums.resize(size);
 	int i = 0;
-	arr_size = num_bootstrap_samples;
+	arr_size = static_cast<int>(num_bootstrap_samples);
 	do {
 		int num_blocks = std::max(1, (int)ceil(arr_size / (2.0f * 1024)));
 		if (num_blocks > 1) {
@@ -201,8 +201,8 @@ void VCMMLT::init() {
 	pc_ray.frame_num = 0;
 	pc_ray.size_x = instance->width;
 	pc_ray.size_y = instance->height;
-	pc_ray.mutations_per_pixel = mutations_per_pixel;
-	pc_ray.num_mlt_threads = num_mlt_threads;
+	pc_ray.mutations_per_pixel = static_cast<float>(mutations_per_pixel);
+	pc_ray.num_mlt_threads = static_cast<uint>(num_mlt_threads);
 }
 
 void VCMMLT::render() {
@@ -226,7 +226,7 @@ void VCMMLT::render() {
 	pc_ray.use_vm = use_vm;
 	pc_ray.light_rand_count = light_path_rand_count;
 	pc_ray.random_num = rand() % UINT_MAX;
-	pc_ray.num_bootstrap_samples = num_bootstrap_samples;
+	pc_ray.num_bootstrap_samples = static_cast<uint>(num_bootstrap_samples);
 	pc_ray.radius = lumen_scene->m_dimensions.radius * vcm_radius_factor / 100.f;
 	pc_ray.radius /= (float)pow((double)pc_ray.frame_num + 1, 0.5 * (1 - 2.0 / 3));
 	pc_ray.min_bounds = lumen_scene->m_dimensions.min;
@@ -319,7 +319,7 @@ void VCMMLT::render() {
 		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 	int counter = 0;
-	prefix_scan(0, num_bootstrap_samples, counter, instance->vkb.rg.get());
+	prefix_scan(0, static_cast<int>(num_bootstrap_samples), counter, instance->vkb.rg.get());
 	// Calculate CDF
 	instance->vkb.rg
 		->add_compute("Calculate CDF",

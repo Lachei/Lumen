@@ -14,10 +14,12 @@ layout(push_constant) uniform _PushConstantRay { PCBDPT pc_ray; };
 layout(buffer_reference, scalar) buffer LightVertices { PathVertex d[]; };
 layout(buffer_reference, scalar) buffer CameraVertices { PathVertex d[]; };
 layout(buffer_reference, scalar) buffer ColorStorages { vec3 d[]; };
+layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
 
 LightVertices light_verts = LightVertices(scene_desc.light_path_addr);
 CameraVertices camera_verts = CameraVertices(scene_desc.camera_path_addr);
 ColorStorages tmp_col = ColorStorages(scene_desc.color_storage_addr);
+LightResampledReservoirs light_resampled_reservoirs = LightResampledReservoirs(scene_desc.global_light_reservoirs_addr);
 
 uint screen_size = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
 uint bdpt_path_idx =
@@ -33,6 +35,116 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
                       pc_ray.frame_num ^ pc_ray.time);
 #include "../bdpt_commons.glsl"
 
+// ------------------------------------------------------------------------------------------
+// custom resampling code
+// ------------------------------------------------------------------------------------------
+void reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in vec3 pos, in vec3 dir, in vec3 n){
+    float rand = rand(seed);
+    reservoir.w_sum += weight;
+    reservoir.m     += 1;
+    const float frac = weight / reservoir.w_sum;
+    if(rand <= frac){
+        // sample should be exchanged with the current sample
+        reservoir.w = weight;
+        reservoir.pos = pos;
+        reservoir.dir = dir;
+        reservoir.n = n;
+    }
+}
+
+// light reservoirs are as large as the screen buffer, meaning that each pixel
+// gets its own reservoir
+// This behaviour is different for other types of integrators (see VCMResampled)
+const float resample_probability = .8f;
+const float light_default_weight = .1f; // default weight that is used to combine the new sample with history samples
+void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 dir, inout vec3 n){
+    // if no temporal data is available or we should not resample return
+    //float rand = mlt_rand(mlt_seed, mlt_large_step);
+    //if(rand > resample_probability)
+    //    light_pdf *= 2 * resample_probability;  // multiplication by 2 as we are sampling in a set of 2, for average calculation normalization by the amount of samples needed
+    //if(rand > resample_probability || pc_ray.frame_num == 0)
+    //    return;
+    if(pc_ray.frame_num == 0)
+        return;
+
+    // load the stored reservoir and add the new sample to it (With a constant weight,
+    // the resampling weight dependant on luminance values will be hadled after ray tracing)
+    LightResampleReservoir reservoir = light_resampled_reservoirs.d[pixel_idx];
+    reservoir_add_light_sample(reservoir, light_default_weight, pos, dir, n);
+    pos = reservoir.pos;
+    dir = reservoir.dir;
+    n   = reservoir.n;
+
+    // calculate the resulting pdf/adjust the pdf value
+    // reasoning for the new pdf value is as follows
+    // light_pdf which is given here as input is hte base probability to which the other probabilities
+    // have to be multiplied up to retrieve the final probability of choosing this sample.
+    // When doing resampling the probability of choosing this final sample is weight/total_weight
+    // To account for the amount of probes in the reservoir the pdf has to me multiplied be the count (Otherwise energy would be introduced)
+    light_pdf *= float(reservoir.m) * reservoir.w / reservoir.w_sum;
+}
+
+void add_light_to_temporal(){
+    
+}
+
+// might have to be switched to compute shader to support proper
+// multi grid resampling
+void resample_light_spatial(){
+
+}
+
+int bdpt_generate_light_subpath_resampled(int max_depth) {
+    LightRecord light_record;
+    vec3 wi, pos, n;
+    float pdf_pos, pdf_dir;
+    float cos_theta;
+#if BDPT_MLT == 1
+    const vec4 rands_pos =
+        vec4(mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
+             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+    const vec2 rands_dir =
+        vec2(mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+    const vec3 Le = sample_light_Le(
+        pc_ray.num_lights, pc_ray.light_triangle_count, cos_theta, light_record,
+        pos, wi, n, pdf_pos, pdf_dir, rands_pos, rands_dir);
+#else
+    const vec3 Le =
+        sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
+                        cos_theta, light_record, pos, wi, n, pdf_pos, pdf_dir);
+#endif
+    if (pdf_dir <= 0) {
+        return 0;
+    }
+
+    // only inserting the pdf_pos as input as it incorporates already the lihgt amount correction
+    resample_light_temporal(pdf_pos, pos, wi, n);
+    cos_theta = max(dot(n, wi), 0);
+
+    light_verts.d[bdpt_path_idx].pos = pos;
+    light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
+    light_verts.d[bdpt_path_idx].delta = 0;
+    light_verts.d[bdpt_path_idx].dir = wi;
+    light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
+    light_verts.d[bdpt_path_idx].n_s = n;
+    vec3 throughput =
+        Le * cos_theta / (pdf_dir * light_verts.d[bdpt_path_idx + 0].pdf_fwd);
+    light_verts.d[bdpt_path_idx + 0].throughput = Le;
+    int num_light_verts =
+        bdpt_random_walk_light(max_depth - 1, throughput, pdf_dir) + 1;
+    if (!is_light_finite(light_record.flags)) {
+        light_verts.d[bdpt_path_idx + 1].pdf_fwd =
+            pdf_pos * abs(dot(wi, light_verts.d[bdpt_path_idx + 1].n_s));
+    }
+    if (is_light_delta(light_record.flags)) {
+        light_verts.d[bdpt_path_idx].pdf_fwd = 0;
+    }
+    return num_light_verts;
+}
+
+// ------------------------------------------------------------------------------------------
+// main function
+// ------------------------------------------------------------------------------------------
 void main() {
     const vec2 pixel = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 in_uv = pixel / vec2(gl_LaunchSizeEXT.xy);
@@ -47,7 +159,7 @@ void main() {
     area_int /= (area_int.w);
     const float cam_area = abs(area_int.x * area_int.y);
 
-    int num_light_paths = bdpt_generate_light_subpath(pc_ray.max_depth + 1);
+    int num_light_paths = bdpt_generate_light_subpath_resampled(pc_ray.max_depth + 1);
     int num_cam_paths = bdpt_generate_camera_subpath(
         d, origin.xyz, pc_ray.max_depth + 1, cam_area);
     for (int t = 1; t <= num_cam_paths; t++) {

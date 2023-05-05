@@ -76,6 +76,7 @@ void BDPTResampled::render() {
 					 .accel = instance->vkb.tlas.accel})
 		.zero(light_path_buffer)
 		.zero(camera_path_buffer)
+		.zero(global_light_reservoir_buffer)
 		//.read(light_path_buffer) // Needed if shader inference is disabled
 		//.read(camera_path_buffer)
 		.push_constants(&pc_ray)
@@ -105,7 +106,7 @@ bool BDPTResampled::update() {
 void BDPTResampled::destroy() {
 	const auto device = instance->vkb.ctx.device;
 	Integrator::destroy();
-	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer};
+	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer, &global_light_reservoir_buffer};
 	for (auto b : buffer_list) {
 		b->destroy();
 	}

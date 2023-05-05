@@ -39,7 +39,7 @@ using vec3 = glm::vec3;
 using vec4 = glm::vec4;
 using mat4 = glm::mat4;
 using uvec4 = glm::uvec4;
-using uint = unsigned int;
+using uint = uint32_t;
 #define ALIGN16 alignas(16)
 #else
 #define ALIGN16
@@ -547,6 +547,7 @@ struct LightResampleReservoir{
 	uint m;
 	vec3 pos;
 	vec3 dir;
+	vec3 n;	// might need the normal as well....
 };
 
 struct LightState {

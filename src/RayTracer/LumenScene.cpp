@@ -87,6 +87,9 @@ void LumenScene::load_scene(const std::string& path) {
 
 	if (ends_with(path, ".json")) {
 		std::ifstream i(path);
+		if(!i)
+			LUMEN_EXIT("File " + path + " could not be loaded");
+		
 		json j;
 		i >> j;
 

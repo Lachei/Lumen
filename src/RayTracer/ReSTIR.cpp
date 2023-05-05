@@ -154,6 +154,4 @@ void ReSTIR::destroy() {
 	for (auto b : buffer_list) {
 		b->destroy();
 	}
-	vkDestroyDescriptorSetLayout(device, desc_set_layout, nullptr);
-	vkDestroyDescriptorPool(device, desc_pool, nullptr);
 }
