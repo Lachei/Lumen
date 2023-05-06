@@ -78,6 +78,34 @@ To load a scene file simply run:
 ```shell
 Lumen.exe <scene_file>
 ```
+---
+
+### Changed by Lachei, should be moved/made consistend with rest
+Exporting an image can be done either by pressing the `F10` key on your keyboard, or by adding an `export_images` list with a corresponding `export_images_format` to the scene description (`json` only).
+These are integrator informations and an example for image export can look as follows:
+
+```
+"integrator" : {
+    "type" : "vcm",
+    "enable_vm" : 1,
+    "radius_factor" : 0.025,
+    "path_length" : 10,
+    "sky_col" : [
+        0.1,0.1,0.1
+    ],
+    "export_images" : "1,3-5",
+    "export_images_format" : "test_%i.exr"
+}
+```
+
+- The list given as string for `export_images` is a comma separated list of either single frame indices, or index ranges (both values included, e.g in the example frame 1, 3, 4 and 5 will be exported).
+- The `%i` in the `export_images_format` will be filled in with the frame number.
+
+
+- Added new light type: environment, only needs `filepath` defined which specifies where the file is located
+- Only a single environment light can be supplied at a time
+
+---
 
 ## Getting started with Lumen
 The best way to get started is to take a look at the unidirectional path tracer implemented in [src/Raytracer/Path.cpp](https://github.com/yuphin/Lumen/blob/master/src/RayTracer/Path.cpp) and gradually explore the other integrators. From there, you can focus on the related shaders that are located in the `src/shaders` folder.

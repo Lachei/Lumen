@@ -17,6 +17,7 @@ void Path::init() {
 	pc_ray.frame_num = 0;
 	pc_ray.size_x = instance->width;
 	pc_ray.size_y = instance->height;
+	pc_ray.env_tex_idx = lumen_scene->env_tex_idx;
 	assert(instance->vkb.rg->settings.shader_inference == true);
 	// For shader resource dependency inference, use this macro to register a buffer address to the rendergraph
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, prim_info_addr, &prim_lookup_buffer, instance->vkb.rg);

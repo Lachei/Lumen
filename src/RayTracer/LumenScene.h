@@ -42,6 +42,7 @@ class LumenScene {
 	std::vector<Material> materials;
 	std::vector<std::string> textures;
 	std::vector<LumenLight> lights;
+	
 
 	struct Dimensions {
 		glm::vec3 min = glm::vec3(std::numeric_limits<float>::max());
@@ -54,6 +55,7 @@ class LumenScene {
 	SceneConfig config;
 
 	uint32_t dir_light_idx = -1;
+	uint32_t env_tex_idx = -1;
 
    private:
 	void compute_scene_dimensions();

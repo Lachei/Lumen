@@ -104,28 +104,6 @@ void LumenScene::load_scene(const std::string& path) {
 			config.sky_col = glm::vec3(sky[0], sky[1], sky[2]);
 		}
 
-		//if (integrator["type"] == "sppm") {
-		//	((SPPMConfig*)curr_config)->base_radius = integrator["base_radius"];
-		//} else if (integrator["type"] == "vcm") {
-		//	((VCMConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
-		//	((VCMConfig*)curr_config)->radius_factor = integrator["radius_factor"];
-		//} else if (integrator["type"] == "pssmlt") {
-		//	((PSSMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-		//	((PSSMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-		//	((PSSMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-		//} else if (integrator["type"] == "smlt") {
-		//	((SMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-		//	((SMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-		//	((SMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-		//} else if (integrator["type"] == "vcmmlt") {
-		//	((VCMMLTConfig*)curr_config)->mutations_per_pixel = integrator["mutations_per_pixel"];
-		//	((VCMMLTConfig*)curr_config)->num_mlt_threads = integrator["num_mlt_threads"];
-		//	((VCMMLTConfig*)curr_config)->num_bootstrap_samples = integrator["num_bootstrap_samples"];
-		//	((VCMMLTConfig*)curr_config)->radius_factor = integrator["radius_factor"];
-		//	((VCMMLTConfig*)curr_config)->enable_vm = integrator["enable_vm"] == 1;
-		//	((VCMMLTConfig*)curr_config)->alternate = integrator["alternate"] == 1;
-		//	((VCMMLTConfig*)curr_config)->light_first = integrator["light_first"] == 1;
-		//}
 		// Load obj file
 		const std::string mesh_file = root + std::string(j["mesh_file"]);
 		tinyobj::ObjReaderConfig reader_config;
@@ -273,24 +251,31 @@ void LumenScene::load_scene(const std::string& path) {
 		config.cam_settings.dir = {d[0], d[1], d[2]};
 		compute_scene_dimensions();
 		for (auto& light : lights_arr) {
-			const auto& pos = light["pos"];
-			const auto& dir = light["dir"];
-			const auto& L = light["L"];
-			lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
-			lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
-			lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
-			if (light["type"] == "spot") {
-				lights[light_idx].light_flags |= LIGHT_SPOT;
-				// Is finite
-				lights[light_idx].light_flags |= 1 << 4;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
-			} else if (light["type"] == "directional") {
-				lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
+			if(light["type"] == "environment"){
+				textures.push_back(light["filepath"]);
+				env_tex_idx = textures.size() - 1;
 			}
-			light_idx++;
+			else{
+				const auto& pos = light["pos"];
+				const auto& dir = light["dir"];
+				const auto& L = light["L"];
+				
+				lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
+				lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
+				lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
+				if (light["type"] == "spot") {
+					lights[light_idx].light_flags |= LIGHT_SPOT;
+					// Is finite
+					lights[light_idx].light_flags |= 1 << 4;
+					// Is delta
+					lights[light_idx].light_flags |= 1 << 5;
+				} else if (light["type"] == "directional") {
+					lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
+					// Is delta
+					lights[light_idx].light_flags |= 1 << 5;
+				}
+				light_idx++;
+			}
 		}
 	} else if (ends_with(path, ".xml")) {
 		MitsubaParser mitsuba_parser;

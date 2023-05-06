@@ -19,6 +19,7 @@ class Integrator {
 	virtual void init();
 	virtual void render() = 0;
 	virtual bool gui();
+	// Handles navigation input and returns if navigation was updated
 	virtual bool update();
 	virtual void destroy();
 	Texture2D output_tex;

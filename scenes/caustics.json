@@ -1,13 +1,13 @@
 {
     "integrator" : {
-        "type" : "vcm",
+        "type" : "path",
         "enable_vm" : 1,
         "radius_factor" : 0.025,
         "path_length" : 10,
         "sky_col" : [
             0.1,0.1,0.1
-        ]
-
+        ],
+        "export_images_format" : "images/bdpt_%i.exr"
     },
 
     "bsdfs": [
@@ -109,8 +109,11 @@
             ],
             "name": "Spotight",
             "type": "spot"
+        },
+        {
+            "type": "environment",
+            "filepath": "/home/lachei/Bilder/rendering_images/skybox.jpg"
         }
-
     ],
     "camera": {
         "fov": 45,

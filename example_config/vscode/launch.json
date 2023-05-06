@@ -16,6 +16,19 @@
             "cwd": "${workspaceFolder}",//"${command:cmake.getLaunchTargetDirectory}",
             "externalConsole": false,
             "MIMode": "gdb"
+        },
+        {
+            "name": "(gdb) Launch Caustics Complex",
+            "type": "cppdbg", // "cppvsdbg" for windows
+            "request": "launch",
+            // Resolved by CMake Tools:
+            "program": "${command:cmake.launchTargetPath}",
+            
+            "args": ["${workspaceFolder}/scenes/caustics.json"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",//"${command:cmake.getLaunchTargetDirectory}",
+            "externalConsole": false,
+            "MIMode": "gdb"
         }
     ]
 }

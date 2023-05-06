@@ -60,6 +60,7 @@ struct PCPath {
 	float total_light_area;
 	int light_triangle_count;
 	uint dir_light_idx;
+	uint env_tex_idx;
 };
 
 struct PCBDPT {
@@ -73,6 +74,7 @@ struct PCBDPT {
 	float total_light_area;
 	int light_triangle_count;
 	uint dir_light_idx;
+	uint env_tex_idx;
 };
 
 struct PCDDGI {
@@ -88,6 +90,7 @@ struct PCDDGI {
 	int light_triangle_count;
 	uint dir_light_idx;
 	int first_frame;
+	uint env_tex_idx;
 };
 
 struct PCMLT {
@@ -115,6 +118,7 @@ struct PCMLT {
 	int use_vc;
 	float radius;
 	uint num_mlt_threads;
+	uint env_tex_idx;
 };
 
 struct PCReSTIR {
@@ -130,6 +134,7 @@ struct PCReSTIR {
 	uint dir_light_idx;
 	uint do_spatiotemporal;
 	uint random_num;
+	uint env_tex_idx;
 };
 
 struct PCReSTIRGI {
@@ -147,6 +152,7 @@ struct PCReSTIRGI {
 	uint random_num;
 	uint total_frame_num;
 	float world_radius;
+	uint env_tex_idx;
 };
 
 struct PCSPPM {
@@ -166,6 +172,7 @@ struct PCSPPM {
 	uint random_num;
 	float radius;
 	float ppm_base_radius;
+	uint env_tex_idx;
 };
 
 struct PCVCM {
@@ -189,6 +196,7 @@ struct PCVCM {
 	uint random_num;
 	uint max_angle_samples;
 	uint total_frame_num;
+	uint env_tex_idx;
 };
 
 struct PCPost {
