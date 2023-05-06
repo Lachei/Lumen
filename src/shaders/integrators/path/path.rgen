@@ -47,14 +47,7 @@ void main() {
             break;
         }
         if (!found_isect) {
-            if(pc_ray.env_tex_idx == uint(-1))
-                col += throughput * shade_atmosphere(pc_ray.dir_light_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
-            else{
-                float theta = acos(direction.y);
-                float phi = atan(direction.z, direction.x);
-                vec2 uv = vec2(phi / PI2, theta / PI);
-                col += throughput * texture(scene_textures[pc_ray.env_tex_idx], uv).xyz;
-            }
+            col += throughput * shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
             break;
         }
         const Material hit_mat =

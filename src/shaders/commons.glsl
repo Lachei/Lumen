@@ -187,18 +187,24 @@ vec3 eval_albedo(const Material m) {
     return albedo;
 }
 
-vec3 shade_atmosphere(uint dir_light_idx, vec3 sky_col, vec3 ray_origin, vec3 ray_dir, float ray_length) {
-    if(dir_light_idx == -1) {
-        return sky_col;
+vec3 shade_atmosphere(uint dir_light_idx, uint env_tex_idx, vec3 sky_col, vec3 ray_origin, vec3 ray_dir, float ray_length) {
+    if(dir_light_idx != -1) {  
+        Light light = lights[dir_light_idx];
+        vec3 light_dir = -normalize(light.to - light.pos);
+        vec3 transmittance;
+        vec2 planet_isect = planet_intersection(ray_origin, ray_dir);
+        if(planet_isect.x > 0) {
+            ray_length = min(ray_length, planet_isect.x);
+        }
+        return integrate_scattering(ray_origin, ray_dir, ray_length, light_dir, light.L, transmittance);
     }
-    Light light = lights[dir_light_idx];
-    vec3 light_dir = -normalize(light.to - light.pos);
-    vec3 transmittance;
-    vec2 planet_isect = planet_intersection(ray_origin, ray_dir);
-    if(planet_isect.x > 0) {
-        ray_length = min(ray_length, planet_isect.x);
+    if(env_tex_idx != uint(-1)) {
+        float theta = acos(ray_dir.y);
+        float phi = atan(ray_dir.z, ray_dir.x);
+        vec2 uv = vec2(phi / PI2, theta / PI);
+        return texture(scene_textures[env_tex_idx], uv).xyz;
     }
-    return integrate_scattering(ray_origin, ray_dir, ray_length, light_dir, light.L, transmittance);
+    return sky_col;
 }
 /*
     Light sampling
