@@ -187,6 +187,12 @@ vec3 eval_albedo(const Material m) {
     return albedo;
 }
 
+vec2 to_spherical(const vec3 cart){
+    float theta = acos(cart.y);
+    float phi = atan(cart.z, cart.x);
+    return vec2(phi / PI2, theta / PI);
+}
+
 vec3 shade_atmosphere(uint dir_light_idx, uint env_tex_idx, vec3 sky_col, vec3 ray_origin, vec3 ray_dir, float ray_length) {
     if(dir_light_idx != -1) {  
         Light light = lights[dir_light_idx];
@@ -199,9 +205,7 @@ vec3 shade_atmosphere(uint dir_light_idx, uint env_tex_idx, vec3 sky_col, vec3 r
         return integrate_scattering(ray_origin, ray_dir, ray_length, light_dir, light.L, transmittance);
     }
     if(env_tex_idx != uint(-1)) {
-        float theta = acos(ray_dir.y);
-        float phi = atan(ray_dir.z, ray_dir.x);
-        vec2 uv = vec2(phi / PI2, theta / PI);
+        vec2 uv = to_spherical(ray_dir);
         return texture(scene_textures[env_tex_idx], uv).xyz;
     }
     return sky_col;
@@ -270,6 +274,19 @@ vec3 uniform_sample_cone(vec2 uv, float cos_max) {
     const float sin_theta = sqrt(1 - cos_theta * cos_theta);
     const float phi = uv.y * PI2;
     return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+vec3 smaple_light_env_Li(const vec2 rands_dir, const vec3 p,
+                     const uint env_tex_idx,
+                     out vec3 wi, out vec3 pos,
+                     out float pdf_pos) {
+    const float dist_from_obs = 1e10;
+    
+    wi = -uniform_sample_cone(rands_dir, PI2);
+    vec2 uv = to_spherical(-wi);
+    pos = p + dist_from_obs * -wi;  // always place the sample far far away
+    pdf_pos = INV_PI * 0.25;        // 1 / (4pi) = surface of a sphere
+    return texture(scene_textures[env_tex_idx], uv).xyz;
 }
 
 vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,

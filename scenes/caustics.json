@@ -1,6 +1,6 @@
 {
     "integrator" : {
-        "type" : "path",
+        "type" : "bdptresampled",
         "enable_vm" : 1,
         "radius_factor" : 0.025,
         "path_length" : 10,

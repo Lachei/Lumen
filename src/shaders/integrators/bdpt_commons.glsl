@@ -122,6 +122,7 @@ int bdpt_random_walk_eye(const int max_depth, vec3 throughput,
         if (payload.material_idx == -1) {
             vtx_assign(b, throughput, throughput);
             vtx_assign(b, pdf_fwd, pdf_fwd);
+            vtx_assign(b, light_flags, -1);
             b++;
             break;
         }

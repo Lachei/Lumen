@@ -59,11 +59,6 @@ const float resample_probability = .8f;
 const float light_default_weight = .1f; // default weight that is used to combine the new sample with history samples
 void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 dir, inout vec3 n){
     // if no temporal data is available or we should not resample return
-    //float rand = mlt_rand(mlt_seed, mlt_large_step);
-    //if(rand > resample_probability)
-    //    light_pdf *= 2 * resample_probability;  // multiplication by 2 as we are sampling in a set of 2, for average calculation normalization by the amount of samples needed
-    //if(rand > resample_probability || pc_ray.frame_num == 0)
-    //    return;
     if(pc_ray.frame_num == 0)
         return;
 
@@ -89,6 +84,7 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
 // reservoir for future reuse
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir = light_resampled_reservoirs.d[pixel_idx];
+    luminance = max(luminance, .001);   // avoiding bias
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
     light_resampled_reservoirs.d[pixel_idx] = reservoir;
 }
@@ -114,6 +110,8 @@ int bdpt_generate_light_subpath_resampled(int max_depth) {
         pc_ray.num_lights, pc_ray.light_triangle_count, cos_theta, light_record,
         pos, wi, n, pdf_pos, pdf_dir, rands_pos, rands_dir);
 #else
+    // test if sky or light should be sampled
+
     const vec3 Le =
         sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
                         cos_theta, light_record, pos, wi, n, pdf_pos, pdf_dir);
@@ -122,7 +120,7 @@ int bdpt_generate_light_subpath_resampled(int max_depth) {
         return 0;
     }
 
-    // only inserting the pdf_pos as input as it incorporates already the lihgt amount correction
+    // only inserting the pdf_pos as input as it incorporates already the light amount correction
     resample_light_temporal(pdf_pos, pos, wi, n);
     cos_theta = max(dot(n, wi), 0);
 
@@ -189,6 +187,9 @@ void main() {
     vec3 splat_img = tmp_col.d[pixel_idx];
     col += splat_img;
     tmp_col.d[pixel_idx] = vec3(0);
+    if (camera_verts.d[bdpt_path_idx + 1].light_flags == -1)
+        col = shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
+    
     if (isnan(luminance(col))) {
         return;
     }
