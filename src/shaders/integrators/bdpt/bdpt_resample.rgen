@@ -95,12 +95,12 @@ void resample_light_spatial(){
 
 }
 
-const float environment_light_probability = .7f;
 int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_origin) {
+    float environment_light_probability = .0f;
     LightRecord light_record;
     vec3 wi, pos, n;
     float pdf_pos, pdf_dir = 1;
-    float cos_theta;
+    float cos_theta = 1;
 #if BDPT_MLT == 1
     const vec4 rands_pos =
         vec4(mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
@@ -113,19 +113,31 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
 #else
     // test if sky or light should be sampled
     float r = rand(seed);
+    environment_light_probability = pc_ray.env_tex_idx == -1 ? 0: pc_ray.num_lights == 0 ? 1: environment_light_probability;
+    r = 1;
     vec3 Le;
-    if(pc_ray.env_tex_idx != -1 && r < environment_light_probability)
-        Le = sample_light_env_Le(vec2(rand(seed), rand(seed)), cam_origin, pc_ray.env_tex_idx, wi, pos, pdf_pos);
-    else
+    if (r < environment_light_probability){
+        Le = 200 * sample_light_env_Le(vec2(rand(seed), rand(seed)), cam_origin, pc_ray.env_tex_idx, wi, pos, pdf_pos);
+        wi = normalize(wi);
+        //wi = vec3(0, 0 , -1);
+        //pos/=1e6;
+        //pos = vec3(2.42,0,-2.432593);
+        n = wi;
+        light_record.flags = LIGHT_DIRECTIONAL | (1 << 5);
+        pdf_pos *= environment_light_probability;
+    }
+    else{
         Le = sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
                         cos_theta, light_record, pos, wi, n, pdf_pos, pdf_dir);
+        pdf_pos *= 1 - environment_light_probability;
+    }
 #endif
     if (pdf_dir <= 0) {
         return 0;
     }
 
     // only inserting the pdf_pos as input as it incorporates already the light amount correction
-    resample_light_temporal(pdf_pos, pos, wi, n);
+    //resample_light_temporal(pdf_pos, pos, wi, n);
     cos_theta = max(dot(n, wi), 0);
 
     light_verts.d[bdpt_path_idx].pos = pos;
@@ -167,6 +179,10 @@ void main() {
     const float cam_area = abs(area_int.x * area_int.y);
 
     int num_light_paths = bdpt_generate_light_subpath_resampled(pc_ray.max_depth + 1, origin.xyz);
+    if(abs(length(light_verts.d[bdpt_path_idx].dir) - 1) > 10){
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(1, 0,0,1));
+        return;
+    }
     int num_cam_paths = bdpt_generate_camera_subpath(
         d, origin.xyz, pc_ray.max_depth + 1, cam_area);
     for (int t = 1; t <= num_cam_paths; t++) {
@@ -208,5 +224,5 @@ void main() {
     }
 
     // updating the temporal reservoirs
-    add_light_to_temporal(luminance(col), light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s);
+    //add_light_to_temporal(luminance(col), light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s);
 }

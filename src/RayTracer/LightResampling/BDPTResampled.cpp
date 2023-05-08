@@ -101,6 +101,7 @@ bool BDPTResampled::update() {
 	bool updated = Integrator::update();
 	if (updated) {
 		pc_ray.frame_num = 0;
+		//std::cout << "Reset frame number" << std::endl;
 	}
 	return updated;
 }

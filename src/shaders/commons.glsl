@@ -513,13 +513,18 @@ vec3 sample_light_env_Le(const vec2 rands_dir, const vec3 p,
                      const uint env_tex_idx,
                      out vec3 wi, out vec3 pos,
                      out float pdf_pos) {
-    const float dist_from_obs = 1e10;
+    const float dist_from_obs = 1e2;
     
-    wi = uniform_sample_cone(rands_dir, PI2);
+    //wi = uniform_sample_cone(rands_dir, PI2);
+    wi.z = 2 * rands_dir.x - 1;
+    float theta = PI2 * rands_dir.y - PI;
+    float z2 = wi.z * wi.z;
+    wi.x = sin(theta) * sqrt(1 - z2);
+    wi.y = cos(theta) * sqrt(1 - z2);
     vec2 uv = to_spherical(-wi);
     pos = p + dist_from_obs * -wi;  // always place the sample far far away
-    pdf_pos = INV_PI * 0.25;        // 1 / (4pi) = surface of a sphere
-    return 2 * texture(scene_textures[env_tex_idx], uv).xyz;
+    pdf_pos = INV_PI * 0.25 / (dist_from_obs * dist_from_obs);        // 1 / (4pi) = surface of a sphere
+    return texture(scene_textures[env_tex_idx], uv).xyz;
 }
 
 vec3 sample_light_Le(const vec4 rands_pos, const vec2 rands_dir,

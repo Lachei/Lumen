@@ -3,7 +3,7 @@
         "type" : "bdptresampled",
         "enable_vm" : 1,
         "radius_factor" : 0.025,
-        "path_length" : 10,
+        "path_length" : 6,
         "sky_col" : [
             0.1,0.1,0.1
         ],
@@ -112,7 +112,7 @@
         },
         {
             "type": "environment",
-            "filepath": "/home/lachei/Bilder/rendering_images/skybox.jpg"
+            "filepath": "/home/stumpfegger/Pictures/environment_map.jpg"
         }
     ],
     "camera": {

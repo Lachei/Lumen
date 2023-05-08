@@ -156,6 +156,8 @@ void Integrator::init() {
 		for (const auto& texture_path : lumen_scene->textures) {
 			int x, y, n;
 			unsigned char* data = stbi_load(texture_path.c_str(), &x, &y, &n, 4);
+			if(!data)
+				LUMEN_ERROR("Image " + texture_path + " could not be loaded.");
 
 			auto size = x * y * 4;
 			auto img_dims = VkExtent2D{(uint32_t)x, (uint32_t)y};
