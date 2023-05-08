@@ -95,10 +95,11 @@ void resample_light_spatial(){
 
 }
 
-int bdpt_generate_light_subpath_resampled(int max_depth) {
+const float environment_light_probability = .7f;
+int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_origin) {
     LightRecord light_record;
     vec3 wi, pos, n;
-    float pdf_pos, pdf_dir;
+    float pdf_pos, pdf_dir = 1;
     float cos_theta;
 #if BDPT_MLT == 1
     const vec4 rands_pos =
@@ -111,9 +112,12 @@ int bdpt_generate_light_subpath_resampled(int max_depth) {
         pos, wi, n, pdf_pos, pdf_dir, rands_pos, rands_dir);
 #else
     // test if sky or light should be sampled
-
-    const vec3 Le =
-        sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
+    float r = rand(seed);
+    vec3 Le;
+    if(pc_ray.env_tex_idx != -1 && r < environment_light_probability)
+        Le = sample_light_env_Le(vec2(rand(seed), rand(seed)), cam_origin, pc_ray.env_tex_idx, wi, pos, pdf_pos);
+    else
+        Le = sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
                         cos_theta, light_record, pos, wi, n, pdf_pos, pdf_dir);
 #endif
     if (pdf_dir <= 0) {
@@ -162,7 +166,7 @@ void main() {
     area_int /= (area_int.w);
     const float cam_area = abs(area_int.x * area_int.y);
 
-    int num_light_paths = bdpt_generate_light_subpath_resampled(pc_ray.max_depth + 1);
+    int num_light_paths = bdpt_generate_light_subpath_resampled(pc_ray.max_depth + 1, origin.xyz);
     int num_cam_paths = bdpt_generate_camera_subpath(
         d, origin.xyz, pc_ray.max_depth + 1, cam_area);
     for (int t = 1; t <= num_cam_paths; t++) {
