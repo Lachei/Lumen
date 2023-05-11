@@ -91,7 +91,6 @@ void BDPTResampled::render() {
 		.bind(mesh_lights_buffer)
 		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
-	//.finalize();
 
 	instance->vkb.rg->run_and_submit(cmd);
 }
