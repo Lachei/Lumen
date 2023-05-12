@@ -53,3 +53,6 @@ The `add_rt(...)` function then returns a `RenderPass` object on which then all 
 There do exist `àdd_gfx(...)` and `àdd_compute(...)` calls which enable the user to create a standard graphics and compute pipeline as well.
 
 To finally run all prerecorded pipelines simply call `instance->vkb.rg->run_and_submit(cmd)` on the instance.
+
+## Using the new integrator
+
