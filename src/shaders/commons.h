@@ -29,6 +29,8 @@
 #define LIGHT_SPOT 1
 #define LIGHT_AREA 2
 #define LIGHT_DIRECTIONAL 3
+// should make shure that no other flag is affected
+#define LIGHT_ENVIRONMENT (1 << 24) 
 
 #ifdef __cplusplus
 #include <glm/glm.hpp>

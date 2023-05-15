@@ -254,6 +254,9 @@ void LumenScene::load_scene(const std::string& path) {
 			if(light["type"] == "environment"){
 				textures.push_back(light["filepath"]);
 				env_tex_idx = textures.size() - 1;
+				lights[light_idx].light_flags |= LIGHT_ENVIRONMENT;
+				lights[light_idx].light_flags |= 1 << 5;
+				lights[light_idx].pos.x = env_tex_idx;	// needed to sample the correct light
 			}
 			else{
 				const auto& pos = light["pos"];
@@ -274,8 +277,8 @@ void LumenScene::load_scene(const std::string& path) {
 					// Is delta
 					lights[light_idx].light_flags |= 1 << 5;
 				}
-				light_idx++;
 			}
+			light_idx++;
 		}
 	} else if (ends_with(path, ".xml")) {
 		MitsubaParser mitsuba_parser;

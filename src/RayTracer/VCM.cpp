@@ -2,6 +2,8 @@
 #include "VCM.h"
 #include <iostream>
 #include <fstream>
+#include <Framework/JsonUtils.h>
+
 const int max_samples = 50000;
 static bool use_vc = true;
 static bool written = false;
@@ -116,8 +118,8 @@ void VCM::init() {
 }
 
 void VCM::render() {
-	const float radius_factor = static_cast<float>(integrator_config["radius_factor"]);
-	const int enable_vm 	  = static_cast<int>(integrator_config["enable_vm"]);
+	const float radius_factor = json_util::get_or(integrator_config, "radius_factor", 1.);//static_cast<float>(integrator_config["radius_factor"]);
+	const int enable_vm 	  = json_util::get_or(integrator_config, "enable_vm", 1);
 
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	const float ppm_base_radius = 0.25f;

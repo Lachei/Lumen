@@ -256,23 +256,24 @@ void Integrator::update_uniform_buffers() {
 }
 
 bool Integrator::update() {
+	const glm::vec3 up{0,1,0};
 	glm::vec3 translation{};
-	float trans_speed = 0.01f;
+	float trans_speed = .005f * std::min(delta_t, 500.f);
 	glm::vec3 front;
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_SHIFT)) {
 		trans_speed *= 4;
 	}
 
-	front.x = cos(glm::radians(camera->rotation.x)) * sin(glm::radians(camera->rotation.y));
-	front.y = sin(glm::radians(camera->rotation.x));
-	front.z = cos(glm::radians(camera->rotation.x)) * cos(glm::radians(camera->rotation.y));
+	front.x = cos(glm::radians(-camera->rotation.x)) * sin(glm::radians(camera->rotation.y));
+	front.y = sin(glm::radians(-camera->rotation.x));
+	front.z = cos(glm::radians(-camera->rotation.x)) * cos(glm::radians(camera->rotation.y));
 	front = glm::normalize(-front);
 	if (instance->window->is_key_held(KeyInput::KEY_W)) {
 		camera->position += front * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_A)) {
-		camera->position -= glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * trans_speed;
+		camera->position -= glm::normalize(glm::cross(front, up)) * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_S)) {
@@ -280,19 +281,19 @@ bool Integrator::update() {
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_D)) {
-		camera->position += glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * trans_speed;
+		camera->position += glm::normalize(glm::cross(front, up)) * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::SPACE) || instance->window->is_key_held(KeyInput::KEY_E)) {
 		// Right
-		auto right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
-		auto up = glm::cross(right, front);
+		//auto right = glm::normalize(glm::cross(front, up));
+		//auto up = glm::cross(right, front);
 		camera->position += up * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_CONTROL) || instance->window->is_key_held(KeyInput::KEY_Q)) {
-		auto right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
-		auto up = glm::cross(right, front);
+		//auto right = glm::normalize(glm::cross(front, up));
+		//auto up = glm::cross(right, front);
 		camera->position -= up * trans_speed;
 		updated = true;
 	}

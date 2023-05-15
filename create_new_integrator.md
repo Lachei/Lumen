@@ -56,3 +56,6 @@ To finally run all prerecorded pipelines simply call `instance->vkb.rg->run_and_
 
 ## Using the new integrator
 
+In order to use the new integrator in the example application the only missing part is to register it.
+
+Simply include your new integrator header in the `IntegratorRegistry.cpp` and add a `REGISTER(YourIntegrator);` at the end of the file. You can then also change your `scene.obj` file to startup with your integrator method by changing the `type` field of the `integrator` object to the name 
