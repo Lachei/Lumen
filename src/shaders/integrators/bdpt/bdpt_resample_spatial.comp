@@ -1,0 +1,43 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+
+#include "../../commons.h"
+#include "../bdpt_resampling_commons.glsl"
+
+layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
+
+LightResampledReservoirs light_temporal_reservoirs = LightResampledReservoirs(scene_desc.global_light_reservoirs_addr);
+LightResampledReservoirs light_spatial_reservoirs = LightResampledReservoirs(scene_desc.global_light_spatial_addr);
+
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+const uint pixel_count = pc_ray.size_x * pc_ray.size_y;
+const uint pixel_x = gl_GlobalInvocationID.x % pc_ray.size_y;
+const uint pixel_y = gl_GlobalInvocationID.x / pc_ray.size_y;
+uint pixel_idx = gl_GlobalInvocationID.x;
+
+#define pixel_xy2idx(x, y) (x) + (y) * pc_ray.size_y
+
+// In this shader multiple temporal reservoirs of neighbours are used to resample the best sample / approximate the true 
+// uminance even better
+// One pass uses the 8 neighbours of the current pixel to better approximate
+// the underlying luminance, repeating this kernel multiple times results in a larger influence radius
+void main(){
+    if(pixel_idx >= pixel_count)
+        return;
+    LightResampledReservoir cur_reservoir = light_temporal_reservoirs.d[pixel_idx];
+
+    for(int i = -1; i <= 1; ++i){
+        for(int j = -1; j <= 1; ++j){
+            if((i == 0 && j == 0) || pixel_x + i < 0 || pixel_x + i >= pc_ray.size_x ||
+                pixel_y + j < 0 || pixel_y + j >= pc_ray.size_y)
+                continue;
+            const int idx = pixel_xy2idx(pixel_x + i, pixel_y + j);
+            LightResampledReservoir neighbour = light_temporal_reservoirs.d[idx];
+            reservoirs_combine(cur_reservoir, neighbour);
+        }
+    }
+
+    light_spatial_reservoirs.d[pixel_idx] = cur_reservoir;
+}

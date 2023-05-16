@@ -280,22 +280,48 @@ vec3 uniform_sample_cone(vec2 uv, float cos_max) {
     return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
 }
 
-const float env_lobe_dist = 1e3;
-vec3 sample_light_env_Le(const vec2 rands_dir, const vec3 p,
+const float env_lobe_dist = 1e2;
+vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
                      const uint env_tex_idx,
                      out vec3 wi, out vec3 pos,
-                     out float pdf_pos) {
+                     out float pdf_pos, out float pdf_dir) {
     
-    //wi = uniform_sample_cone(rands_dir, PI2);
+    // sampling the sphere uniformly for the postion
     wi.z = 2 * rands_dir.x - 1;
     float theta = PI2 * rands_dir.y - PI;
     float z2 = wi.z * wi.z;
     wi.x = sin(theta) * sqrt(1 - z2);
     wi.y = cos(theta) * sqrt(1 - z2);
-    vec2 uv = to_spherical(wi);
-    pos = p + env_lobe_dist * -wi;  // always place the sample far far away
-    pdf_pos = INV_PI * 0.25;// / (env_lobe_dist * env_lobe_dist);        // 1 / (4pi) = surface of a sphere
-    return 2000 * texture(scene_textures[env_tex_idx], uv).xyz / (env_lobe_dist * env_lobe_dist);
+    vec2 uv = to_spherical(-wi);
+    pos = world_center + env_lobe_dist * -wi;   // always place the sample far far away
+    pdf_pos = INV_PI * INV_PI * 0.25;           // 1 / (4pi^2) = surface of a sphere
+
+    // importance sample the himisphere at pos in the direction of the ray
+    vec3 w_dir = wi;
+    wi = sample_cos_hemisphere(rands_dir.zw, w_dir);
+    pdf_dir = dot(w_dir, wi) / (INV_PI * INV_PI * .5);
+    //wi = w_dir;
+    
+    return .00001 * texture(scene_textures[env_tex_idx], uv).xyz * env_lobe_dist * env_lobe_dist;
+}
+vec3 sample_light_env_Li(const vec2 rands_dir, const vec3 world_center,
+                     const uint env_tex_idx,
+                     out vec3 wi, out vec3 pos,
+                     out float pdf_pos) {
+    
+    // sampling the sphere uniformly for the postion
+    wi.z = 2 * rands_dir.x - 1;
+    float theta = PI2 * rands_dir.y - PI;
+    float z2 = wi.z * wi.z;
+    wi.x = sin(theta) * sqrt(1 - z2);
+    wi.y = cos(theta) * sqrt(1 - z2);
+    vec2 uv = to_spherical(-wi);
+    pos = world_center + env_lobe_dist * -wi;   // always place the sample far far away
+    pdf_pos = INV_PI * INV_PI * 0.25;           // 1 / (4pi^2) = surface of a sphere
+
+    // for Li no hemisphere direction sampling needed
+    
+    return .00001 * texture(scene_textures[env_tex_idx], uv).xyz * env_lobe_dist * env_lobe_dist;
 }
 
 vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
@@ -365,7 +391,7 @@ vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
     } break;
     case LIGHT_ENVIRONMENT: {
         int env_tex_idx = int(light.pos.x);
-        L = sample_light_env_Le(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
+        L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
         wi = pos - p;
         wi_len = env_lobe_dist;
         cos_from_light = 1;
@@ -442,7 +468,7 @@ vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
     case LIGHT_ENVIRONMENT: {
         int env_tex_idx = int(light.pos.x);
         vec3 pos;
-        L = sample_light_env_Le(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
+        L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
         wi = pos - p;
         wi_len = length(wi);
         wi /= wi_len;
@@ -520,7 +546,7 @@ vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
     case LIGHT_ENVIRONMENT: {
         int env_tex_idx = int(light.pos.x);
         vec3 pos;
-        L = sample_light_env_Le(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_dir_w);
+        L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_dir_w);
         wi = pos - p;
         wi_len = length(wi);
         wi /= wi_len;
@@ -643,8 +669,7 @@ vec3 sample_light_Le(const vec4 rands_pos, const vec2 rands_dir,
     } break;
     case LIGHT_ENVIRONMENT: {
         int env_tex_idx = int(light.pos.x);
-        L = sample_light_env_Le(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
-        pdf_dir_w = 1;
+        L = sample_light_env_Le(rands_pos, vec3(0), env_tex_idx, wi, pos, pdf_pos_a, pdf_dir_w);
         pdf_direct_a = 1;
         pdf_emit_w = pdf_pos_a;
         cos_from_light = 1;
@@ -780,7 +805,7 @@ vec3 sample_light_with_idx(const vec4 rands_pos, const vec3 p,
     } else if (light_type == LIGHT_ENVIRONMENT) {
         int env_tex_idx = int(light.pos.x);
         float p;
-        L = sample_light_env_Le(rands_pos.xy, vec3(0), env_tex_idx, n, pos, p);
+        L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, n, pos, p);
     }
     return L;
 }
