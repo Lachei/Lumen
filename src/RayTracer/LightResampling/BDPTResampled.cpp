@@ -28,6 +28,13 @@ void BDPTResampled::init() {
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
 
+	global_light_spatial_reservoir_buffer.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			instance->width * instance->height * sizeof(LightResampleReservoir));
+
 	SceneDesc desc;
 	desc.vertex_addr = vertex_buffer.get_device_address();
 	desc.index_addr = index_buffer.get_device_address();
@@ -40,6 +47,7 @@ void BDPTResampled::init() {
 	desc.camera_path_addr = camera_path_buffer.get_device_address();
 	desc.color_storage_addr = color_storage_buffer.get_device_address();
 	desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
+	desc.global_light_spatial_addr = global_light_spatial_reservoir_buffer.get_device_address();
 
 	scene_desc_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -53,9 +61,12 @@ void BDPTResampled::init() {
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, camera_path_addr, &camera_path_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, color_storage_addr, &color_storage_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, global_light_reservoirs_addr, &global_light_reservoir_buffer, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, global_light_spatial_addr, &global_light_spatial_reservoir_buffer, instance->vkb.rg);
 }
 
 void BDPTResampled::render() {
+	constexpr bool use_spatial_reservoirs = true;
+
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = (int)lights.size();
 	pc_ray.time = rand() % UINT_MAX;
@@ -65,6 +76,18 @@ void BDPTResampled::render() {
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 	pc_ray.dir_light_idx = lumen_scene->dir_light_idx;
 	pc_ray.env_tex_idx = lumen_scene->env_tex_idx;
+	
+	// executing the spatial resampling
+	const uint32_t spatial_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f));
+	if(use_spatial_reservoirs){
+		instance->vkb.rg
+			->add_compute("Spatial Resample", {.shader = Shader("src/shaders/integrators/bdpt/bdpt_resample_spatial.comp"),
+											   .dims = {spatial_dim_x, 1, 1}})
+			.push_constants(&pc_ray)
+			.bind(scene_desc_buffer);
+	}
+
+	// doing the reaytracing + temporal resampling update
 	instance->vkb.rg
 		->add_rt("BDPTResampled",
 				 {
@@ -107,7 +130,7 @@ bool BDPTResampled::update() {
 void BDPTResampled::destroy() {
 	const auto device = instance->vkb.ctx.device;
 	Integrator::destroy();
-	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer, &global_light_reservoir_buffer};
+	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer, &global_light_reservoir_buffer, &global_light_spatial_reservoir_buffer};
 	for (auto b : buffer_list) {
 		b->destroy();
 	}

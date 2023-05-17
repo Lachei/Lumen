@@ -657,6 +657,7 @@ struct SceneDesc {
 
 	// BDPT Ressampled
 	uint64_t global_light_reservoirs_addr;
+	uint64_t global_light_spatial_addr;
 };
 
 struct Desc2 {

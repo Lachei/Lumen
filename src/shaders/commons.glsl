@@ -281,7 +281,7 @@ vec3 uniform_sample_cone(vec2 uv, float cos_max) {
 }
 
 const float env_lobe_dist = 1e3;
-const float light_multiplier = .0000001;
+const float light_multiplier = .1;
 vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
                      const uint env_tex_idx,
                      out vec3 wi, out vec3 pos,

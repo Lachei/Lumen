@@ -20,6 +20,7 @@ LightVertices light_verts = LightVertices(scene_desc.light_path_addr);
 CameraVertices camera_verts = CameraVertices(scene_desc.camera_path_addr);
 ColorStorages tmp_col = ColorStorages(scene_desc.color_storage_addr);
 LightResampledReservoirs light_resampled_reservoirs = LightResampledReservoirs(scene_desc.global_light_reservoirs_addr);
+LightResampledReservoirs light_spatial_reservoirs = LightResampledReservoirs(scene_desc.global_light_spatial_addr);
 
 uint screen_size = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
 uint bdpt_path_idx =
@@ -43,7 +44,8 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
 // light reservoirs are as large as the screen buffer, meaning that each pixel
 // gets its own reservoir
 // This behaviour is different for other types of integrators (see VCMResampled)
-const float light_default_weight = .01f; // default weight that is used to combine the new sample with history samples
+const float light_default_weight = .01f; // default weight that is used to combine the new sample with history samples (is only the minimal value, normally the blending factor is chosen according to the amount of samples already in the reservoir)
+const bool use_spatial_reservoirs = true;
 void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 dir, inout vec3 n){
     // if no temporal data is available or we should not resample return
     if(pc_ray.frame_num == 0)
@@ -52,7 +54,12 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     // load the stored reservoir and add the new sample to it (With a constant weight,
     // the resampling weight dependant on luminance values will be hadled after ray tracing)
     LightResampleReservoir reservoir;
-    load_light_resampled(light_resampled_reservoirs, reservoir);
+    if(use_spatial_reservoirs){
+        load_light_resampled(light_spatial_reservoirs, reservoir);
+    }
+    else{
+        load_light_resampled(light_resampled_reservoirs, reservoir);
+    }
     float light_weight = 1. / (reservoir.m + 1.);
     light_weight = max(light_weight, light_default_weight);
     reservoir_add_light_sample(reservoir, light_weight, pos, dir, n);
@@ -72,6 +79,7 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
 
 // loads the temporal reservoir and adds the current light starting point to the temporal
 // reservoir for future reuse
+const uint max_samples = 10;
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir;
     if(pc_ray.frame_num == 0){
@@ -81,8 +89,17 @@ void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     else{
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
-    luminance = max(luminance, .001);   // avoiding bias
+    // TODO maybe recheck
+    luminance = clamp(luminance, .001, 10);   // avoiding bias
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
+
+    // reducing the maximmum amount of samples stored temporally to avoid numerical problems
+    if(reservoir.m > max_samples){
+        uint prev_m = reservoir.m;
+        reservoir.m = max_samples;
+        reservoir.w_sum *= 1. - float(max_samples) / prev_m;
+    }
+
     store_light_resampled(light_resampled_reservoirs, reservoir);
 }
 
@@ -203,11 +220,8 @@ void main() {
     } else {
         imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
     }
-    //LightResampleReservoir reservoir = light_resampled_reservoirs.d[pixel_idx];
-    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(0,1,0, 1));
-    //if(reservoir.m > 10)
+    //if(reservoir_store_error)
     //    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(1,0,0,1));
-
 
     // updating the temporal reservoirs
     add_light_to_temporal(luminance(col), light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s);

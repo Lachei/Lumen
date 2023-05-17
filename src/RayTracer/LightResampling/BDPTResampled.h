@@ -20,6 +20,7 @@ class BDPTResampled : public Integrator {
 	Buffer camera_path_buffer;
 	Buffer color_storage_buffer;
 	Buffer global_light_reservoir_buffer;
+	Buffer global_light_spatial_reservoir_buffer;
 	SceneConfig& config;
 	nlohmann::json integrator_config;
 };

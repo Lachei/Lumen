@@ -553,9 +553,9 @@ vec3 bdpt_connect(int s, int t) {
             sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
                             wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
 #else
-        const vec3 Le = //vec3(0);    // disabling direct lighting
-            sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
-                            wi_len, n, pos, pdf_pos_a, cos_y, record);
+        const vec3 Le = vec3(0);    // disabling direct lighting
+            //sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
+            //                wi_len, n, pos, pdf_pos_a, cos_y, record);
 #endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =
