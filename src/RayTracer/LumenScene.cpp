@@ -253,7 +253,7 @@ void LumenScene::load_scene(const std::string& path) {
 		for (auto& light : lights_arr) {
 			if(light["type"] == "environment"){
 				textures.push_back(light["filepath"]);
-				env_tex_idx = textures.size() - 1;
+				env_tex_idx = static_cast<uint32_t>(textures.size() - 1);
 				lights[light_idx].light_flags |= LIGHT_ENVIRONMENT;
 				lights[light_idx].light_flags |= 1 << 5;
 				lights[light_idx].pos.x = env_tex_idx;	// needed to sample the correct light

@@ -3,6 +3,20 @@
 
 #include "../commons.h"
 
+#define store_light_resampled(array, reservoir) array.d[pixel_idx].w_sum = reservoir.w_sum;\
+    array.d[pixel_idx].w = reservoir.w;\
+    array.d[pixel_idx].m = reservoir.m;\
+    array.d[pixel_idx].pos = reservoir.pos;\
+    array.d[pixel_idx].dir = reservoir.dir;\
+    array.d[pixel_idx].n = reservoir.n;
+
+#define load_light_resampled(array, reservoir) reservoir.w_sum = array.d[pixel_idx].w_sum;\
+    reservoir.w = array.d[pixel_idx].w;\
+    reservoir.m = array.d[pixel_idx].m;\
+    reservoir.pos = array.d[pixel_idx].pos;\
+    reservoir.dir = array.d[pixel_idx].dir;\
+    reservoir.n = array.d[pixel_idx].n;
+
 // Adds a new sample to the reservoir. The reservoir is updated inplace
 // @return true if the new sample is the new active sample
 bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in vec3 pos, in vec3 dir, in vec3 n){

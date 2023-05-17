@@ -78,7 +78,6 @@ void BDPTResampled::render() {
 					 .accel = instance->vkb.tlas.accel})
 		.zero(light_path_buffer)
 		.zero(camera_path_buffer)
-		.zero(global_light_reservoir_buffer)
 		//.read(light_path_buffer) // Needed if shader inference is disabled
 		//.read(camera_path_buffer)
 		.push_constants(&pc_ray)
