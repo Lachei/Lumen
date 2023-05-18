@@ -79,12 +79,14 @@ void BDPTResampled::render() {
 	
 	// executing the spatial resampling
 	const uint32_t spatial_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f));
+	std::vector<ShaderMacro> resample_macros;
 	if(use_spatial_reservoirs){
 		instance->vkb.rg
 			->add_compute("Spatial Resample", {.shader = Shader("src/shaders/integrators/bdpt/bdpt_resample_spatial.comp"),
 											   .dims = {spatial_dim_x, 1, 1}})
 			.push_constants(&pc_ray)
 			.bind(scene_desc_buffer);
+		resample_macros.emplace_back("USE_SPATIAL_RESERVOIRS");
 	}
 
 	// doing the reaytracing + temporal resampling update
@@ -97,6 +99,7 @@ void BDPTResampled::render() {
 								 {"src/shaders/ray_shadow.rmiss"},
 								 {"src/shaders/ray.rchit"},
 								 {"src/shaders/ray.rahit"}},
+					 .macros = std::move(resample_macros),
 					 .dims = {instance->width, instance->height},
 					 .accel = instance->vkb.tlas.accel})
 		.zero(light_path_buffer)
