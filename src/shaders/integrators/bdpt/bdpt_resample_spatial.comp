@@ -37,7 +37,8 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 // uminance even better
 // One pass uses the 8 neighbours of the current pixel to better approximate
 // the underlying luminance, repeating this kernel multiple times results in a larger influence radius
-const int max_mult = 20;
+const int max_mult = 40;
+const int steps = 3;
 void main(){
     if(pixel_idx >= pixel_count)
         return;
@@ -45,9 +46,10 @@ void main(){
     load_light_resampled(light_temporal_reservoirs, cur_reservoir);
 
     int mult = int(rand(seed) * max_mult) + 1;
+    int step_size = max(mult / steps, 1);
 
-    for(int i = -mult; i <= mult; i += mult){
-        for(int j = -mult; j <= mult; j += mult){
+    for(int i = -mult; i <= mult; i += step_size){
+        for(int j = -mult; j <= mult; j += step_size){
             if((i == 0 && j == 0) || pixel_x + i < 0 || pixel_x + i >= pc_ray.size_x ||
                 pixel_y + j < 0 || pixel_y + j >= pc_ray.size_y)
                 continue;

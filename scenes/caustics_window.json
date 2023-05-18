@@ -1,0 +1,116 @@
+{
+    "integrator" : {
+        "type" : "bdptresampled",
+        "enable_vm" : 1,
+        "radius_factor" : 0.025,
+        "path_length" : 10,
+        "sky_col" : [
+            0.1,0.1,0.1
+        ],
+        "export_images_format" : "images/bdpt_%i.exr"
+    },
+
+    "bsdfs": [
+        {
+            "ior": 1.52,
+            "name": "Glass",
+            "refs": [
+                "glass"
+            ],
+            "albedo": [
+                1,
+                1,
+                1
+            ],
+            "type": "glass"
+        },
+        {
+            "name": "Ring",
+            "refs": [
+                "ring"
+            ],
+            "albedo": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "metalness" : [
+                0.95,
+                0.92,
+                0.06
+            ],
+            "roughness": 0.1,
+            "type": "glossy"
+        },
+       
+        {
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ],
+            "name": "Other Walls",
+            "refs": [
+                "left_wall",
+                "right_wall",
+                "ceiling",
+                "back_wall",
+                "front_wall"
+            ],
+            "type": "diffuse"
+        },
+
+        {
+            "albedo": [
+                0.64,
+                0.165,
+                0.165
+            ],
+            "name": "Table",
+            "refs": [
+               "table" 
+            ],
+            "type": "diffuse"
+        },
+
+        {
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ],
+            "name": "Floor",
+            "refs": [
+                "floor"
+            ],
+            "metalness" : [
+                1,
+                1,
+                1
+            ],
+            "roughness": 0.05,
+            "type": "glossy"
+        }
+       
+    ],
+
+    "lights" : [
+
+        {
+            "type" : "environment",
+            "filepath" : "/home/lachei/Bilder/rendering_images/skybox.jpg"
+        }
+    ],
+    "camera": {
+        "fov": 45,
+        "position": [
+            2.7,
+            0.5,
+            3.1
+        ],
+        "dir" : [
+            -1.420776,-2.158489, 2
+        ]
+    },
+    "mesh_file": "caustics_window.obj"
+}

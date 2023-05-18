@@ -77,7 +77,7 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
 
 // loads the temporal reservoir and adds the current light starting point to the temporal
 // reservoir for future reuse
-const uint max_samples = 5;
+const uint max_samples = 20;
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir;
     if(pc_ray.frame_num == 0){
@@ -88,7 +88,7 @@ void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    luminance = clamp(luminance, .1, 10);   // avoiding bias
+    luminance = clamp(luminance, .1, 100);   // avoiding bias
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
 
     // reducing the maximmum amount of samples stored temporally to avoid numerical problems
