@@ -57,7 +57,7 @@ bool reservoirs_combine(inout LightResampleReservoir a, in LightResampleReservoi
     a.m     += b.m;
     const float frac = b.w_sum / a.w_sum;
     if(rand <= frac){
-        a.w = b.w_sum;
+        a.w = b.w; //b.w_sum;
         a.pos = b.pos;
         a.dir = b.dir;
         a.n = b.n;

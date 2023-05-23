@@ -44,7 +44,7 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
 // light reservoirs are as large as the screen buffer, meaning that each pixel
 // gets its own reservoir
 // This behaviour is different for other types of integrators (see VCMResampled)
-const float light_default_weight = .01f; // default weight that is used to combine the new sample with history samples (is only the minimal value, normally the blending factor is chosen according to the amount of samples already in the reservoir)
+const float light_default_weight = .001f; // default weight that is used to combine the new sample with history samples (is only the minimal value, normally the blending factor is chosen according to the amount of samples already in the reservoir)
 void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 dir, inout vec3 n){
     // if no temporal data is available or we should not resample return
     if(pc_ray.frame_num == 0)
@@ -77,7 +77,7 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
 
 // loads the temporal reservoir and adds the current light starting point to the temporal
 // reservoir for future reuse
-const uint max_samples = 20;
+const uint max_samples = 10;
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir;
     if(pc_ray.frame_num == 0){
@@ -88,14 +88,16 @@ void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    luminance = clamp(luminance, .1, 100);   // avoiding bias
+    //luminance = clamp(luminance, .1, 100);   // avoiding bias
+    if(luminance < .001) // small luminances are simply ignored to avoid bias
+        return;
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
 
     // reducing the maximmum amount of samples stored temporally to avoid numerical problems
-    if(false && reservoir.m > max_samples){
+    if(reservoir.m > max_samples){
         uint prev_m = reservoir.m;
         reservoir.m = max_samples;
-        reservoir.w_sum *= 1. - float(max_samples) / prev_m;
+        reservoir.w_sum *= float(max_samples) / prev_m;
     }
 
     store_light_resampled(light_resampled_reservoirs, reservoir);
@@ -127,11 +129,12 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     if (pdf_dir <= 0) {
         return 0;
     }
-    light_pdf_pos = pdf_pos;
 
     // only inserting the pdf_pos as input as it incorporates already the light amount correction
     resample_light_temporal(pdf_pos, pos, wi, n);
     cos_theta = max(dot(n, wi), 0);
+
+    light_pdf_pos = pdf_pos;
 
     light_verts.d[bdpt_path_idx].pos = pos;
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
@@ -140,7 +143,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
     vec3 throughput =
-        Le * cos_theta / (pdf_dir * light_verts.d[bdpt_path_idx + 0].pdf_fwd);
+        Le * cos_theta / (pdf_dir * pdf_pos);
     light_verts.d[bdpt_path_idx + 0].throughput = Le;
     int num_light_verts =
         bdpt_random_walk_light(max_depth - 1, throughput, pdf_dir) + 1;

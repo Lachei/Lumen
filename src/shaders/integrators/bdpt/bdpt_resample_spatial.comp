@@ -37,7 +37,7 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 // uminance even better
 // One pass uses the 8 neighbours of the current pixel to better approximate
 // the underlying luminance, repeating this kernel multiple times results in a larger influence radius
-const int max_mult = 40;
+const int max_mult = 400;
 const int steps = 3;
 void main(){
     if(pixel_idx >= pixel_count)

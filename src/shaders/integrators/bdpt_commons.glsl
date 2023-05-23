@@ -537,7 +537,8 @@ vec3 bdpt_connect(int s, int t) {
         } else {
             L = vec3(1, 1, 1) * cam_vtx(t - 1).throughput;
         }
-    } else if (s == 1) {
+    } else if (false && s == 1) {
+        // currently not used (Eval G should do the correct things already)
         vec3 wi;
         float wi_len;
         float pdf_pos_a;
@@ -553,9 +554,9 @@ vec3 bdpt_connect(int s, int t) {
             sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
                             wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
 #else
-        const vec3 Le = vec3(0);    // disabling direct lighting
-            //sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
-            //                wi_len, n, pos, pdf_pos_a, cos_y, record);
+        const vec3 Le =// vec3(0);    // disabling direct lighting
+            sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
+                            wi_len, n, pos, pdf_pos_a, cos_y, record);
 #endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =
@@ -566,7 +567,7 @@ vec3 bdpt_connect(int s, int t) {
         const Material mat =
             load_material(cam_vtx(t - 1).material_idx, cam_vtx(t - 1).uv);
         const vec3 f = eval_bsdf(mat, wo, wi, cam_vtx(t - 1).n_s);
-        if (f != vec3(0)) {
+        if (f != vec3(0) && Le != vec3(0)) {
             traceRayEXT(tlas,
                         gl_RayFlagsTerminateOnFirstHitEXT |
                             gl_RayFlagsSkipClosestHitShaderEXT,
@@ -600,9 +601,16 @@ vec3 bdpt_connect(int s, int t) {
                                                  light_vtx(s - 1).uv);
 
             vec3 wo_1 = normalize(cam_vtx(t - 2).pos - cam_vtx(t - 1).pos);
-            vec3 wo_2 = normalize(light_vtx(s - 2).pos - light_vtx(s - 1).pos);
-            const vec3 brdf1 = eval_bsdf(mat_1, wo_1, d, cam_vtx(t - 1).n_s);
-            const vec3 brdf2 = eval_bsdf(mat_2, wo_2, -d, light_vtx(s - 1).n_s);
+            vec3 brdf1 = eval_bsdf(mat_1, wo_1, d, cam_vtx(t - 1).n_s);
+            vec3 brdf2;
+            if(s == 1){
+                G = (dot(n_s, -d)) * (dot(n_t, d)) ;
+                brdf2 = vec3(1);
+            }
+            else{
+                vec3 wo_2 = normalize(light_vtx(s - 2).pos - light_vtx(s - 1).pos);
+                brdf2 = eval_bsdf(mat_2, wo_2, -d, light_vtx(s - 1).n_s);
+            }
             if (brdf1 != vec3(0) && brdf2 != vec3(0)) {
                 vec3 ray_origin =
                     offset_ray2(cam_vtx(t - 1).pos, cam_vtx(t - 1).n_s);
