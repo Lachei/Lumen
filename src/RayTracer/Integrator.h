@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include "../LumenPCH.h"
 #include "Framework/Camera.h"
 #include "Framework/CommandBuffer.h"
@@ -48,6 +49,7 @@ class Integrator {
 	LumenScene* lumen_scene;
 
    private:
+    std::chrono::system_clock::time_point _last_frame_clock;
 	void create_blas();
 	void create_tlas();
 };

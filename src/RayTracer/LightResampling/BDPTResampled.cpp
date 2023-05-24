@@ -105,7 +105,7 @@ bool BDPTResampled::update() {
 void BDPTResampled::destroy() {
 	const auto device = instance->vkb.ctx.device;
 	Integrator::destroy();
-	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer};
+	std::vector<Buffer*> buffer_list = {&light_path_buffer, &camera_path_buffer, &color_storage_buffer, &global_light_reservoir_buffer};
 	for (auto b : buffer_list) {
 		b->destroy();
 	}
