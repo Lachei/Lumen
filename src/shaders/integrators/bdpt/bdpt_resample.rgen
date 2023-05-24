@@ -58,7 +58,7 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     #else
         load_light_resampled(light_resampled_reservoirs, reservoir);
     #endif
-    float light_weight = 1. / (reservoir.m + 1.);
+    float light_weight = reservoir.w_sum / float(reservoir.m);
     light_weight = max(light_weight, light_default_weight);
     reservoir_add_light_sample(reservoir, light_weight, pos, dir, n);
     pos = reservoir.pos;
@@ -71,13 +71,14 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     // have to be multiplied up to retrieve the final probability of choosing this sample.
     // When doing resampling the probability of choosing this final sample is weight/total_weight
     // To account for the amount of probes in the reservoir the pdf has to me multiplied by the count (Otherwise energy would be introduced)
+
     light_pdf *= float(reservoir.m) * reservoir.w / reservoir.w_sum;
 }
 
 
 // loads the temporal reservoir and adds the current light starting point to the temporal
 // reservoir for future reuse
-const uint max_samples = 10;
+const uint max_samples = 1;
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir;
     if(pc_ray.frame_num == 0){
@@ -138,7 +139,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
 
     light_verts.d[bdpt_path_idx].pos = pos;
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
-    light_verts.d[bdpt_path_idx].delta = uint(is_light_delta(light_record.flags));
+    light_verts.d[bdpt_path_idx].delta = 0;//uint(is_light_delta(light_record.flags));
     light_verts.d[bdpt_path_idx].dir = wi;
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
@@ -206,8 +207,8 @@ void main() {
     
     //col = light_verts.d[bdpt_path_idx].pos;
     //col = vec3(dot(normalize(-light_verts.d[bdpt_path_idx].pos), light_verts.d[bdpt_path_idx].n_s));
-    if (camera_verts.d[bdpt_path_idx + 1].light_flags == -1)
-        col = shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
+    //if (camera_verts.d[bdpt_path_idx + 1].light_flags == -1)
+    //    col = shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
     
     if (isnan(luminance(col)))
         col = vec3(0);
