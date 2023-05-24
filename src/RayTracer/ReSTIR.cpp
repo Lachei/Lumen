@@ -75,6 +75,7 @@ void ReSTIR::render() {
 	pc_ray.random_num = rand() % UINT_MAX;
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
+	pc_ray.enable_accumulation = enable_accumulation;
 
 	const std::initializer_list<ResourceBinding> rt_bindings = {
 		output_tex,
@@ -84,7 +85,7 @@ void ReSTIR::render() {
 
 	// Temporal pass + path tracing
 	instance->vkb.rg
-		->add_rt("ReSTIR - Temporal Pass", {.shaders = {{"src/shaders/integrators/restir/temporal_pass.rgen"},
+		->add_rt("ReSTIR - Temporal Pass", {.shaders = {{"src/shaders/integrators/restir/di/temporal_pass.rgen"},
 														{"src/shaders/ray.rmiss"},
 														{"src/shaders/ray_shadow.rmiss"},
 														{"src/shaders/ray.rchit"},
@@ -101,7 +102,7 @@ void ReSTIR::render() {
 		.bind_tlas(instance->vkb.tlas);
 	// Spatial pass
 	instance->vkb.rg
-		->add_rt("ReSTIR - Spatial Pass", {.shaders = {{"src/shaders/integrators/restir/spatial_pass.rgen"},
+		->add_rt("ReSTIR - Spatial Pass", {.shaders = {{"src/shaders/integrators/restir/di/spatial_pass.rgen"},
 													   {"src/shaders/ray.rmiss"},
 													   {"src/shaders/ray_shadow.rmiss"},
 													   {"src/shaders/ray.rchit"},
@@ -116,7 +117,7 @@ void ReSTIR::render() {
 
 	// Output
 	instance->vkb.rg
-		->add_rt("ReSTIR - Output", {.shaders = {{"src/shaders/integrators/restir/output.rgen"},
+		->add_rt("ReSTIR - Output", {.shaders = {{"src/shaders/integrators/restir/di/output.rgen"},
 												 {"src/shaders/ray.rmiss"},
 												 {"src/shaders/ray_shadow.rmiss"},
 												 {"src/shaders/ray.rchit"},
@@ -144,6 +145,12 @@ bool ReSTIR::update() {
 	return updated;
 }
 
+bool ReSTIR::gui() { 
+	bool result = false;
+	result |= ImGui::Checkbox("Enable accumulation", &enable_accumulation);
+	return result;
+}
+
 void ReSTIR::destroy() {
 	const auto device = instance->vkb.ctx.device;
 	Integrator::destroy();
@@ -154,6 +161,4 @@ void ReSTIR::destroy() {
 	for (auto b : buffer_list) {
 		b->destroy();
 	}
-	vkDestroyDescriptorSetLayout(device, desc_set_layout, nullptr);
-	vkDestroyDescriptorPool(device, desc_pool, nullptr);
 }

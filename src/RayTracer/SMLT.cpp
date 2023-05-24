@@ -3,9 +3,10 @@
 
 void SMLT::init() {
 	Integrator::init();
-	mutations_per_pixel = 100.0f;
-	num_mlt_threads = 1600 * 900 / 2;
-	num_bootstrap_samples = 1600 * 900 / 2;
+	mutations_per_pixel = integrator_config["mutations_per_pixel"];
+	num_mlt_threads = integrator_config["num_mlt_threads"];
+	num_bootstrap_samples = integrator_config["num_bootstrap_samples"];
+
 	mutation_count = int(instance->width * instance->height * mutations_per_pixel / float(num_mlt_threads));
 	light_path_rand_count = 6 + 2 * config.path_length;
 	cam_path_rand_count = 3 + 6 * config.path_length;
