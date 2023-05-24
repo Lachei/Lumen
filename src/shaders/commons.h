@@ -39,12 +39,60 @@ using vec2 = glm::vec2;
 using ivec3 = glm::ivec3;
 using vec3 = glm::vec3;
 using vec4 = glm::vec4;
-using mat4 = glm::mat4;
+using mat4 = glm::mat4; 
 using uvec4 = glm::uvec4;
 using uint = uint32_t;
+using ivec2 = glm::ivec2;
 #define ALIGN16 alignas(16)
 #else
 #define ALIGN16
+#endif
+
+
+// Debug logger for Raygen shaders
+#ifndef __cplusplus
+
+	#define LOG_CLICKED(str) \
+		if(ubo.debug_click == 1 && ivec2(gl_LaunchIDEXT.xy) == ubo.clicked_pos) { \
+			debugPrintfEXT(str); \
+	}
+
+	#define LOG_CLICKED_VAL(str, args) \
+		if(ubo.debug_click == 1 && ivec2(gl_LaunchIDEXT.xy) == ubo.clicked_pos) { \
+			debugPrintfEXT(str, args); \
+		}
+
+	#define ASSERT_CLICKED_STR(cond, expected, str, val) \
+		if(ubo.debug_click == 1 && ivec2(gl_LaunchIDEXT.xy) == ubo.clicked_pos) { \
+			if(cond != expected)  {\
+				debugPrintfEXT("Assertion failed: "); \
+				debugPrintfEXT(str, val); \
+			} \
+		}
+
+	#define ASSERT_CLICKED(cond, expected) \
+		if(ubo.debug_click == 1 && ivec2(gl_LaunchIDEXT.xy) == ubo.clicked_pos) { \
+			if(cond != expected)  {\
+				debugPrintfEXT("Assertion failed!\n"); \
+			} \
+	}
+
+	#define LOG_VAL(str, args, coord) \
+		if(ivec2(gl_LaunchIDEXT.xy) == coord) { \
+			debugPrintfEXT(str, args); \
+		} \
+
+	#define LOG(str, coord) \
+		if(ivec2(gl_LaunchIDEXT.xy) == coord) { \
+			debugPrintfEXT(str); \
+		} \
+
+	#define ASSERT(cond, expected) \
+		if(cond != expected) \
+			debugPrintfEXT("Assertion failed on pixel %v2i", ivec2(gl_LaunchIDEXT.xy)); \
+		}
+
+
 #endif
 
 #define ENABLE_DISNEY 0
@@ -137,6 +185,7 @@ struct PCReSTIR {
 	uint do_spatiotemporal;
 	uint random_num;
 	uint env_tex_idx;
+	int enable_accumulation;
 };
 
 struct PCReSTIRGI {
@@ -155,6 +204,7 @@ struct PCReSTIRGI {
 	uint total_frame_num;
 	float world_radius;
 	uint env_tex_idx;
+	int enable_accumulation;
 };
 
 struct PCSPPM {
@@ -231,6 +281,8 @@ struct SceneUBO {
 	vec4 view_pos;
 	mat4 prev_view;
 	mat4 prev_projection;
+	ivec2 clicked_pos;
+	int debug_click;
 };
 
 struct DDGIUniforms {
@@ -690,13 +742,5 @@ struct PrimMeshInfo {
 	vec4 min_pos;
 	vec4 max_pos;
 };
-
-#ifdef __cplusplus	// Descriptor binding helper for C++ and GLSL
-#define START_BINDING(a) enum a {
-#define END_BINDING() }
-#else
-#define START_BINDING(a) const uint
-#define END_BINDING()
-#endif
 
 #endif

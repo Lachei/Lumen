@@ -773,8 +773,8 @@ void RenderPass::run(VkCommandBuffer cmd) {
 	// Post execution buffer barriers
 	{
 		std::vector<VkBufferMemoryBarrier2> post_execution_buffer_memory_barriers;
-		post_execution_buffer_memory_barriers.reserve(buffer_barriers.size());
-		for (auto& barrier : buffer_barriers) {
+		post_execution_buffer_memory_barriers.reserve(post_execution_buffer_barriers.size());
+		for (auto& barrier : post_execution_buffer_barriers) {
 			auto curr_stage = get_pipeline_stage(type, barrier.src_access_flags);
 			auto dst_stage = get_pipeline_stage(type, barrier.dst_access_flags);
 			post_execution_buffer_memory_barriers.push_back(buffer_barrier2(
@@ -923,8 +923,8 @@ void RenderGraph::run(VkCommandBuffer cmd) {
 				record_override_encountered = true;
 			}
 			passes[i].finalize(record_override_encountered);
-			rem_passes--;
 		}
+		rem_passes--;
 		i++;
 	}
 
@@ -948,6 +948,7 @@ void RenderGraph::run(VkCommandBuffer cmd) {
 	rem_passes = ending_pass_idx - beginning_pass_idx;
 
 	while (rem_passes > 0) {
+		rem_passes--;
 		if (!passes[i].active) {
 			i++;
 			continue;
@@ -957,7 +958,6 @@ void RenderGraph::run(VkCommandBuffer cmd) {
 		img_sync_resources[i].img_barriers.resize(passes[i].wait_signals_img.size());
 		img_sync_resources[i].dependency_infos.resize(passes[i].wait_signals_img.size());
 		passes[i].run(cmd);
-		rem_passes--;
 		i++;
 	}
 }
@@ -1014,8 +1014,8 @@ void RenderGraph::submit(CommandBuffer& cmd) {
 	while (rem_passes > 0) {
 		if (passes[i].active) {
 			passes[i].submitted = true;
-			rem_passes--;
 		}
+		rem_passes--;
 		i++;
 	}
 	beginning_pass_idx = ending_pass_idx;

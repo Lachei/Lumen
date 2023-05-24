@@ -20,4 +20,3 @@ struct SceneConfig {
 	SceneConfig(const std::string& integrator_name)
 		: integrator_name(integrator_name) {}
 };
-
