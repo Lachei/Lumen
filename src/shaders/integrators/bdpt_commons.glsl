@@ -604,7 +604,7 @@ vec3 bdpt_connect(int s, int t) {
             vec3 brdf1 = eval_bsdf(mat_1, wo_1, d, cam_vtx(t - 1).n_s);
             vec3 brdf2;
             if(s == 1){
-                G = (dot(n_s, -d)) * (dot(n_t, d)) ;
+                G = dot(n_t, d);
                 brdf2 = vec3(1);
             }
             else{

@@ -88,9 +88,9 @@ void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    //luminance = clamp(luminance, .1, 100);   // avoiding bias
-    if(luminance < .001) // small luminances are simply ignored to avoid bias
-        return;
+    luminance = clamp(luminance, .01, 1000);   // avoiding bias
+    //if(luminance < .001) // small luminances are simply ignored to avoid bias
+    //    return;
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
 
     // reducing the maximmum amount of samples stored temporally to avoid numerical problems
@@ -138,7 +138,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
 
     light_verts.d[bdpt_path_idx].pos = pos;
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
-    light_verts.d[bdpt_path_idx].delta = 0;
+    light_verts.d[bdpt_path_idx].delta = uint(is_light_delta(light_record.flags));
     light_verts.d[bdpt_path_idx].dir = wi;
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;

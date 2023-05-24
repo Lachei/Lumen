@@ -293,7 +293,7 @@ vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
     float z2 = wi.z * wi.z;
     wi.x = sin(theta) * sqrt(1 - z2);
     wi.y = cos(theta) * sqrt(1 - z2);
-    vec2 uv = to_spherical(wi);
+    vec2 uv = to_spherical(-wi);
     pos = world_center + env_lobe_dist * -wi;   // always place the sample far far away
     pdf_pos = INV_PI * INV_PI * 0.25;           // 1 / (4pi^2) = surface of a sphere
 
