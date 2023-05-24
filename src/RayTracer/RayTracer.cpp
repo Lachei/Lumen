@@ -138,7 +138,6 @@ void RayTracer::update() {
 	float frame_time = draw_frame();
 	cpu_avg_time = (1.0f - 1.0f / (cnt)) * cpu_avg_time + frame_time / (float)cnt;
 	cpu_avg_time = 0.95f * cpu_avg_time + 0.05f * frame_time;
-	integrator->delta_t = frame_time;
 	integrator->update();
 }
 

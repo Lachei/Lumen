@@ -72,13 +72,13 @@ void resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     // When doing resampling the probability of choosing this final sample is weight/total_weight
     // To account for the amount of probes in the reservoir the pdf has to me multiplied by the count (Otherwise energy would be introduced)
 
-    light_pdf *= float(reservoir.m) * reservoir.w / reservoir.w_sum;
+    light_pdf = float(reservoir.m) * reservoir.w / reservoir.w_sum / light_pdf;
 }
 
 
 // loads the temporal reservoir and adds the current light starting point to the temporal
 // reservoir for future reuse
-const uint max_samples = 1;
+const uint max_samples = 20;
 void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
     LightResampleReservoir reservoir;
     if(pc_ray.frame_num == 0){
@@ -89,9 +89,9 @@ void add_light_to_temporal(float luminance, vec3 pos, vec3 dir, vec3 n){
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    luminance = clamp(luminance, .01, 1000);   // avoiding bias
-    //if(luminance < .001) // small luminances are simply ignored to avoid bias
-    //    return;
+    //luminance = clamp(luminance, .01, 1000);   // avoiding bias
+    if(luminance < .001) // small luminances are simply ignored to avoid bias
+        return;
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n);
 
     // reducing the maximmum amount of samples stored temporally to avoid numerical problems
@@ -207,8 +207,8 @@ void main() {
     
     //col = light_verts.d[bdpt_path_idx].pos;
     //col = vec3(dot(normalize(-light_verts.d[bdpt_path_idx].pos), light_verts.d[bdpt_path_idx].n_s));
-    //if (camera_verts.d[bdpt_path_idx + 1].light_flags == -1)
-    //    col = shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
+    if (camera_verts.d[bdpt_path_idx + 1].light_flags == -1)
+        col = shade_atmosphere(pc_ray.dir_light_idx, pc_ray.env_tex_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
     
     if (isnan(luminance(col)))
         col = vec3(0);

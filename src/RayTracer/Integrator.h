@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include "../LumenPCH.h"
 #include "Framework/Camera.h"
 #include "Framework/CommandBuffer.h"
@@ -26,7 +27,6 @@ class Integrator {
 	std::unique_ptr<Camera> camera = nullptr;
 	bool updated = false;
 	VkSampler texture_sampler;
-	float delta_t;
 
    protected:
 	virtual void update_uniform_buffers();
@@ -50,6 +50,7 @@ class Integrator {
 	LumenScene* lumen_scene;
 
    private:
+    std::chrono::system_clock::time_point _last_frame_clock;
 	void create_blas();
 	void create_tlas();
 };

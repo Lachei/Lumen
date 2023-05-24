@@ -182,6 +182,8 @@ void Integrator::init() {
 	settings.base_extent = {(uint32_t)instance->width, (uint32_t)instance->height, 1};
 	settings.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	output_tex.create_empty_texture("Color Output", &instance->vkb.ctx, settings, VK_IMAGE_LAYOUT_GENERAL);
+
+	_last_frame_clock = std::chrono::system_clock::now();
 }
 
 bool Integrator::gui() {
@@ -260,9 +262,11 @@ void Integrator::update_uniform_buffers() {
 }
 
 bool Integrator::update() {
+	double delta_t = std::chrono::duration<double>(std::chrono::system_clock::now() - _last_frame_clock).count();
+
 	const glm::vec3 up{0,1,0};
 	glm::vec3 translation{};
-	float trans_speed = .005f * std::min(delta_t, 500.f);
+	float trans_speed = static_cast<float>(.005 * std::min(delta_t, 500.));
 	glm::vec3 front;
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_SHIFT)) {
 		trans_speed *= 4;
