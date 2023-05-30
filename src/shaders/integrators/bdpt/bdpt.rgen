@@ -74,6 +74,7 @@ void main() {
     tmp_col.d[pixel_idx] = vec3(0);
     if (isnan(luminance(col))) 
         col = vec3(0);
+    col*=2;
     
     if (pc_ray.frame_num > 0) {
         float w = 1. / float(pc_ray.frame_num + 1);

@@ -537,7 +537,7 @@ vec3 bdpt_connect(int s, int t) {
         } else {
             L = vec3(1, 1, 1) * cam_vtx(t - 1).throughput;
         }
-    } else if (false && s == 1) {
+    } else if (s == 1) {
         // currently not used (Eval G should do the correct things already)
         vec3 wi;
         float wi_len;
@@ -546,18 +546,30 @@ vec3 bdpt_connect(int s, int t) {
         vec3 pos;
         LightRecord record;
         float cos_y;
-#if BDPT_MLT == 1
-        const vec4 rands_pos = vec4(
-            mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
-            mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
-        const vec3 Le =
-            sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
-                            wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
-#else
-        const vec3 Le =// vec3(0);    // disabling direct lighting
-            sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
-                            wi_len, n, pos, pdf_pos_a, cos_y, record);
-#endif
+// #if BDPT_MLT == 1
+//         const vec4 rands_pos = vec4(
+//             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
+//             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+//         const vec3 Le =
+//             sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
+//                             wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
+// #else
+//         const vec3 Le =// vec3(0);    // disabling direct lighting
+//             sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
+//                             wi_len, n, pos, pdf_pos_a, cos_y, record);
+// #endif
+        // copying things from the light_verts buffer
+        pos         = light_vtx(s - 1).pos;
+        pdf_pos_a   = light_vtx(s - 1).pdf_fwd;
+        n           = light_vtx(s - 1).n_s;
+        record.flags= light_vtx(s - 1).light_flags;
+        vec3 Le     = light_vtx(s - 1).throughput;
+        wi = pos - cam_vtx(t - 1).pos;
+        wi_len = length(wi);
+        wi /= wi_len;
+        cos_y     = max(dot(n, -wi), 0);
+        if(!is_light_delta(record.flags))
+            Le *= 1. / cos_y;//pdf_pos_a / cos_y;
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =
             offset_ray2(cam_vtx(t - 1).pos, cam_vtx(t - 1).n_s);

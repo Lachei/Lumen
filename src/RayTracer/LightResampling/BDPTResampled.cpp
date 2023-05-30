@@ -1,5 +1,8 @@
 #include "../../LumenPCH.h"
 #include "BDPTResampled.h"
+#include <ranges>
+template<typename T>
+inline std::ranges::iota_view<size_t> s_range(const T& v){return std::ranges::iota_view(size_t(0), v.size());}
 
 void BDPTResampled::init() {
 	Integrator::init();
@@ -25,14 +28,14 @@ void BDPTResampled::init() {
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
 
 	global_light_spatial_reservoir_buffer.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
 
 	SceneDesc desc;
@@ -66,6 +69,26 @@ void BDPTResampled::init() {
 
 void BDPTResampled::render() {
 	constexpr bool use_spatial_reservoirs = true;
+
+	if(pc_ray.frame_num < 10){
+		std::cout << "Light reservoir output for frame " << pc_ray.frame_num << std::endl;
+		Buffer& gpu_reservoirs = global_light_spatial_reservoir_buffer;
+		gpu_reservoirs.map(); // maps the memory to the data pointer
+		std::vector<LightResampleReservoir> reservoirs(instance->width * instance->height);
+		LightResampleReservoir* data_p = reinterpret_cast<LightResampleReservoir*>(gpu_reservoirs.data);
+		std::copy(data_p, data_p + reservoirs.size(), reservoirs.begin());
+		gpu_reservoirs.unmap();
+		// writeout into csv file
+		std::ofstream file("reservoirs/spatial" + std::to_string(pc_ray.frame_num) + ".csv");
+		assert(file);
+		// header line
+		file << "pos_x,pos_y,pos_z,d_x,d_y,d_z,n_x,n_y,n_z,w_sum,w,m\n";
+		for(const auto& r: reservoirs)
+			// assembling the line for writeout
+			file << r.pos.x << ',' << r.pos.y << ',' << r.pos.z << ',' << r.dir.x << ',' << r.dir.y << ',' << r.dir.z << ','
+				 << r.n.x << ',' << r.n.y << ',' << r.n.z << ',' << r.w_sum << ',' << r.w << ',' << r.m << '\n';
+	}
+	
 
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = (int)lights.size();
