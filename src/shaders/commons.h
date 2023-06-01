@@ -609,7 +609,8 @@ struct LightResampleReservoir{
 	uint m;
 	vec3 pos;
 	vec3 dir;
-	vec3 n;	// might need the normal as well....
+	vec3 n;	// might need the normal as well...
+	vec3 L;
 };
 
 struct LightState {

@@ -8,32 +8,36 @@
     array.d[pixel_idx].m = reservoir.m;\
     array.d[pixel_idx].pos = reservoir.pos;\
     array.d[pixel_idx].dir = reservoir.dir;\
-    array.d[pixel_idx].n = reservoir.n;
+    array.d[pixel_idx].n = reservoir.n;\
+    array.d[pixel_idx].L = reservoir.L;
 
 #define store_light_resampled_idx(array, reservoir, idx) array.d[idx].w_sum = reservoir.w_sum;\
     array.d[idx].w = reservoir.w;\
     array.d[idx].m = reservoir.m;\
     array.d[idx].pos = reservoir.pos;\
     array.d[idx].dir = reservoir.dir;\
-    array.d[idx].n = reservoir.n;
+    array.d[idx].n = reservoir.n;\
+    array.d[idx].L = reservoir.L;
 
 #define load_light_resampled(array, reservoir) reservoir.w_sum = array.d[pixel_idx].w_sum;\
     reservoir.w = array.d[pixel_idx].w;\
     reservoir.m = array.d[pixel_idx].m;\
     reservoir.pos = array.d[pixel_idx].pos;\
     reservoir.dir = array.d[pixel_idx].dir;\
-    reservoir.n = array.d[pixel_idx].n;
+    reservoir.n = array.d[pixel_idx].n;\
+    reservoir.L = array.d[pixel_idx].L;
 
 #define load_light_resampled_idx(array, reservoir, idx) reservoir.w_sum = array.d[idx].w_sum;\
     reservoir.w = array.d[idx].w;\
     reservoir.m = array.d[idx].m;\
     reservoir.pos = array.d[idx].pos;\
     reservoir.dir = array.d[idx].dir;\
-    reservoir.n = array.d[idx].n;
+    reservoir.n = array.d[idx].n;\
+    reservoir.L = array.d[idx].L;
 
 // Adds a new sample to the reservoir. The reservoir is updated inplace
 // @return true if the new sample is the new active sample
-bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in vec3 pos, in vec3 dir, in vec3 n){
+bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in vec3 pos, in vec3 dir, in vec3 n, in vec3 L){
     float rand = rand(seed);
     reservoir.w_sum += weight;
     reservoir.m     += 1;
@@ -44,6 +48,7 @@ bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float
         reservoir.pos = pos;
         reservoir.dir = dir;
         reservoir.n = n;
+        reservoir.L = L;
         return true;
     }
     return false;
@@ -61,6 +66,7 @@ bool reservoirs_combine(inout LightResampleReservoir a, in LightResampleReservoi
         a.pos = b.pos;
         a.dir = b.dir;
         a.n = b.n;
+        a.L = b.L;
         return true;
     }
     return false;

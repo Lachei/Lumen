@@ -70,7 +70,7 @@ void BDPTResampled::init() {
 void BDPTResampled::render() {
 	constexpr bool use_spatial_reservoirs = true;
 
-	if(pc_ray.frame_num < 10){
+	if(false && pc_ray.frame_num < 10){
 		std::cout << "Light reservoir output for frame " << pc_ray.frame_num << std::endl;
 		Buffer& gpu_reservoirs = global_light_spatial_reservoir_buffer;
 		gpu_reservoirs.map(); // maps the memory to the data pointer

@@ -138,6 +138,10 @@ uvec4 init_rng(uvec2 pixel_coords, uvec2 resolution, uint frame_num) {
     return uvec4(pixel_coords.xy, frame_num, 0);
 }
 
+uvec4 init_rng(uvec2 pixel_coords, uvec2 resolution, uint frame_num, uint time) {
+    return uvec4(pixel_coords.xy, frame_num, time);
+}
+
 // Return random float in (0, 1) range
 float rand(inout uvec4 rng_state) {
     rng_state.w++;

@@ -280,7 +280,7 @@ vec3 uniform_sample_cone(vec2 uv, float cos_max) {
 }
 
 const float env_lobe_dist = 1e3;
-const float light_multiplier = .0001;
+const float light_multiplier = 100;
 vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
                      const uint env_tex_idx,
                      out vec3 wi, out vec3 pos,
@@ -301,7 +301,7 @@ vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
     wi = sample_cos_hemisphere(rands_dir.zw, w_dir);
     pdf_dir = dot(w_dir, wi) / (INV_PI * INV_PI * .5);
     
-    return light_multiplier * texture(scene_textures[env_tex_idx], uv).xyz * env_lobe_dist * env_lobe_dist;
+    return light_multiplier * texture(scene_textures[env_tex_idx], uv).xyz;// * env_lobe_dist * env_lobe_dist;
 }
 vec3 sample_light_env_Li(const vec2 rands_dir, const vec3 world_center,
                      const uint env_tex_idx,
@@ -320,7 +320,7 @@ vec3 sample_light_env_Li(const vec2 rands_dir, const vec3 world_center,
 
     // for Li no hemisphere direction sampling needed
     
-    return light_multiplier * texture(scene_textures[env_tex_idx], uv).xyz * env_lobe_dist * env_lobe_dist;
+    return light_multiplier * texture(scene_textures[env_tex_idx], uv).xyz;// * env_lobe_dist * env_lobe_dist;
 }
 
 vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
