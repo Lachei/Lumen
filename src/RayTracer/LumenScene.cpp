@@ -255,7 +255,7 @@ void LumenScene::load_scene(const std::string& path) {
 				textures.push_back(light["filepath"]);
 				env_tex_idx = static_cast<uint32_t>(textures.size() - 1);
 				lights[light_idx].light_flags |= LIGHT_ENVIRONMENT;
-				lights[light_idx].light_flags |= 1 << 5;
+				lights[light_idx].light_flags |= LIGHT_DELTA;
 				lights[light_idx].pos.x = env_tex_idx;	// needed to sample the correct light
 			}
 			else{
@@ -268,14 +268,12 @@ void LumenScene::load_scene(const std::string& path) {
 				lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
 				if (light["type"] == "spot") {
 					lights[light_idx].light_flags |= LIGHT_SPOT;
-					// Is finite
-					lights[light_idx].light_flags |= 1 << 4;
-					// Is delta
-					lights[light_idx].light_flags |= 1 << 5;
+					lights[light_idx].light_flags |= LIGHT_FINITE;
+					lights[light_idx].light_flags |= LIGHT_DELTA;
 				} else if (light["type"] == "directional") {
 					lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
 					// Is delta
-					lights[light_idx].light_flags |= 1 << 5;
+					lights[light_idx].light_flags |= LIGHT_DELTA;
 				}
 			}
 			light_idx++;
@@ -450,7 +448,7 @@ void LumenScene::load_scene(const std::string& path) {
 				lights[i].to = light.to;
 				lights[i].light_flags = LIGHT_DIRECTIONAL;
 				// Is delta
-				lights[i].light_flags |= 1 << 5;
+				lights[i].light_flags |= LIGHT_DELTA;
 			}
 			i++;
 		}

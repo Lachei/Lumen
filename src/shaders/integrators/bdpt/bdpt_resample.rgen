@@ -104,9 +104,9 @@ void add_light_to_temporal(float luminance, float sampling_pdf, vec3 pos, vec3 d
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    //luminance = clamp(luminance, .01, 1000);   // avoiding bias
-    if(luminance < .001) // small luminances are simply ignored to avoid bias
-        return;
+    luminance = clamp(luminance, .01, 1000);   // avoiding bias
+    //if(luminance < .001) // small luminances are simply ignored to avoid bias
+    //    return;
     
     const float p_h = luminance * sampling_pdf; // the luminance is the integral evaluated at the sample normalized by the sampling probability. So this unnormalizes
     reservoir_add_light_sample(reservoir, luminance, pos, dir, n, L, p_h);
@@ -151,10 +151,11 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     }
 
     // only inserting the pdf_pos as input as it incorporates already the light amount correction
-    resampled = resample_light_temporal(pdf_pos, pos, wi, n, Le);
+    float pdf_light = pdf_pos * pdf_dir;
+    resampled = resample_light_temporal(pdf_light, pos, wi, n, Le);
     L = Le;
-    original_pdf = pdf_pos;
-    cos_theta = max(dot(n, wi), 0);
+    original_pdf = pdf_light;
+    cos_theta = abs(dot(n, wi));
 
     light_pdf_pos = pdf_pos;
 
@@ -162,10 +163,10 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
     light_verts.d[bdpt_path_idx].delta = 0;//uint(is_light_delta(light_record.flags));
     light_verts.d[bdpt_path_idx].dir = wi;
-    light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
+    light_verts.d[bdpt_path_idx].pdf_fwd = pdf_light;//pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
     vec3 throughput =
-        Le * cos_theta / (pdf_dir * pdf_pos);
+        Le * cos_theta * pc_ray.num_lights / (pdf_light);
     light_verts.d[bdpt_path_idx + 0].throughput = Le;
     int num_light_verts = bdpt_random_walk_light(max_depth - 1, throughput, pdf_dir) + 1;
     

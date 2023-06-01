@@ -222,7 +222,7 @@ int bdpt_generate_light_subpath(int max_depth) {
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
     vec3 throughput =
-        Le * cos_theta / (pdf_dir * light_verts.d[bdpt_path_idx + 0].pdf_fwd);
+        Le * cos_theta / (pdf_dir * pdf_pos);
     light_verts.d[bdpt_path_idx + 0].throughput = Le;
     int num_light_verts =
         bdpt_random_walk_light(max_depth - 1, throughput, pdf_dir) + 1;

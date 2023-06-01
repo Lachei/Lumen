@@ -57,11 +57,11 @@ float correct_shading_normal(const vec3 n_g, const vec3 n_s, const vec3 wi,
 float uniform_cone_pdf(float cos_max) { return 1. / (PI2 * (1 - cos_max)); }
 
 bool is_light_finite(uint light_props) {
-    return ((light_props >> 4) & 0x1) != 0;
+    return (light_props & LIGHT_FINITE) != 0;
 }
 
 bool is_light_delta(uint light_props) {
-    return ((light_props >> 5) & 0x1) != 0;
+    return (light_props & LIGHT_DELTA) != 0;
 }
 
 uint get_light_type(uint light_props) { return uint((light_props & 0x7)); }

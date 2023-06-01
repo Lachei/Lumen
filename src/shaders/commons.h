@@ -30,8 +30,9 @@
 #define LIGHT_AREA 2
 #define LIGHT_DIRECTIONAL 3
 #define LIGHT_ENVIRONMENT 4
-// should make shure that no other flag is affected
-//#define LIGHT_ENVIRONMENT (1 << 24) 
+
+#define LIGHT_FINITE 1 << 4
+#define LIGHT_DELTA 1 << 5
 
 #ifdef __cplusplus
 #include <glm/glm.hpp>
