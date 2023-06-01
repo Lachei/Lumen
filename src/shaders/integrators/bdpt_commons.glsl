@@ -546,30 +546,33 @@ vec3 bdpt_connect(int s, int t) {
         vec3 pos;
         LightRecord record;
         float cos_y;
- #if BDPT_MLT == 1
-         const vec4 rands_pos = vec4(
-             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
-             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
-         const vec3 Le =
-             sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
-                             wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
- #else
-         const vec3 Le =// vec3(0);    // disabling direct lighting
-             sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
-                             wi_len, n, pos, pdf_pos_a, cos_y, record);
- #endif
-        //// copying things from the light_verts buffer
-        //pos         = light_vtx(s - 1).pos;
-        //pdf_pos_a   = light_vtx(s - 1).pdf_fwd;
-        //n           = light_vtx(s - 1).n_s;
-        //record.flags= light_vtx(s - 1).light_flags;
-        //vec3 Le     = light_vtx(s - 1).throughput;
-        //wi = pos - cam_vtx(t - 1).pos;
-        //wi_len = length(wi);
-        //wi /= wi_len;
-        //cos_y     = max(dot(n, -wi), 0);
+#if 0
+#if BDPT_MLT == 1
+        const vec4 rands_pos = vec4(
+            mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
+            mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+        const vec3 Le =
+            sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
+                            wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
+#else
+        const vec3 Le =// vec3(0);    // disabling direct lighting
+            sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
+                            wi_len, n, pos, pdf_pos_a, cos_y, record);
+#endif
+#else
+        // copying things from the light_verts buffer
+        pos         = light_vtx(s - 1).pos;
+        pdf_pos_a   = light_vtx(s - 1).pdf_fwd;
+        n           = light_vtx(s - 1).n_s;
+        record.flags= light_vtx(s - 1).light_flags;
+        vec3 Le     = light_vtx(s - 1).throughput;
+        wi = pos - cam_vtx(t - 1).pos;
+        wi_len = length(wi);
+        wi /= wi_len;
+        cos_y     = max(dot(n, -wi), 0);
         //if(!is_light_delta(record.flags))
         //    Le *= 1. / cos_y;//pdf_pos_a / cos_y;
+#endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =
             offset_ray2(cam_vtx(t - 1).pos, cam_vtx(t - 1).n_s);

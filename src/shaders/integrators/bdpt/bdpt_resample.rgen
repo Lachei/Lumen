@@ -64,7 +64,11 @@ bool resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     if(reservoir.m == 0)
         light_weight = 1;
 
-    bool resampled = reservoir_add_light_sample(reservoir, light_weight, pos, dir, n, L);
+    // as light_weight can be interpreted as the normalized sampling probability (p_h/p)
+    // here we unnormalize light_weight to get an approximate p_h
+    const float p_h = light_weight * light_pdf; 
+
+    bool resampled = reservoir_add_light_sample(reservoir, light_weight, pos, dir, n, L, p_h);
     pos = reservoir.pos;
     dir = reservoir.dir;
     n   = reservoir.n;
@@ -81,7 +85,8 @@ bool resample_light_temporal(inout float light_pdf, inout vec3 pos, inout vec3 d
     // have to be multiplied up to retrieve the final probability of choosing this sample.
     // When doing resampling the probability of choosing this final sample is weight/total_weight
     // To account for the amount of probes in the reservoir the pdf has to me multiplied by the count (Otherwise energy would be introduced)
-    light_pdf *= reservoir.m * reservoir.w / reservoir.w_sum;
+    light_pdf = reservoir.p_h * reservoir.m / reservoir.w_sum;
+    //light_pdf *= reservoir.m * reservoir.w / reservoir.w_sum;
     return resampled;
 }
 
@@ -103,7 +108,8 @@ void add_light_to_temporal(float luminance, float sampling_pdf, vec3 pos, vec3 d
     if(luminance < .001) // small luminances are simply ignored to avoid bias
         return;
     
-    reservoir_add_light_sample(reservoir, luminance, pos, dir, n, L);
+    const float p_h = luminance * sampling_pdf; // the luminance is the integral evaluated at the sample normalized by the sampling probability. So this unnormalizes
+    reservoir_add_light_sample(reservoir, luminance, pos, dir, n, L, p_h);
 
     // reducing the maximmum amount of samples stored temporally to avoid numerical problems
     if(reservoir.m > max_samples){
@@ -228,7 +234,6 @@ void main() {
     
     if (isnan(luminance(col)))
         col = vec3(0);
-    col /= 2;
     
     if (pc_ray.frame_num > 0) {
         float w = 1. / float(pc_ray.frame_num + 1);
@@ -241,6 +246,6 @@ void main() {
     }
 
     // updating the temporal reservoirs
-    if(!resampled)
+    //if(!resampled)
         add_light_to_temporal(luminance(col), original_pdf, light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s, L);
 }

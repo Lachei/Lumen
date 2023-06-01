@@ -29,8 +29,9 @@
 #define LIGHT_SPOT 1
 #define LIGHT_AREA 2
 #define LIGHT_DIRECTIONAL 3
+#define LIGHT_ENVIRONMENT 4
 // should make shure that no other flag is affected
-#define LIGHT_ENVIRONMENT (1 << 24) 
+//#define LIGHT_ENVIRONMENT (1 << 24) 
 
 #ifdef __cplusplus
 #include <glm/glm.hpp>
@@ -604,8 +605,9 @@ struct SelectedReservoirs {
 };
 
 struct LightResampleReservoir{
-	float w_sum;
-	float w;
+	float w_sum;	// is the sum of p_hat / p
+	float w;		// servers as p_hat / p
+	float p_h;		// needed for normalization
 	uint m;
 	vec3 pos;
 	vec3 dir;

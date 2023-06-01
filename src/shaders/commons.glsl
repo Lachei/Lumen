@@ -64,7 +64,7 @@ bool is_light_delta(uint light_props) {
     return ((light_props >> 5) & 0x1) != 0;
 }
 
-uint get_light_type(uint light_props) { return uint((light_props & 0x7) | (light_props & LIGHT_ENVIRONMENT)); }
+uint get_light_type(uint light_props) { return uint((light_props & 0x7)); }
 
 float light_pdf(const Light light, const vec3 n_s, const vec3 wi) {
     const float cos_width = cos(30 * PI / 180);
@@ -392,7 +392,7 @@ vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
         int env_tex_idx = int(light.pos.x);
         L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, wi, pos, pdf_pos_a);
         wi = pos - p;
-        wi_len = env_lobe_dist;
+        wi_len = length(wi);
         wi /= wi_len;
         cos_from_light = 1;
         n = wi;
@@ -806,6 +806,7 @@ vec3 sample_light_with_idx(const vec4 rands_pos, const vec3 p,
         int env_tex_idx = int(light.pos.x);
         float p;
         L = sample_light_env_Li(rands_pos.xy, vec3(0), env_tex_idx, n, pos, p);
+        n = -n;
     }
     return L;
 }
