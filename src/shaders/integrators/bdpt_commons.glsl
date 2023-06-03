@@ -268,6 +268,7 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
     float s_0_pdf;
     vec3 s_0_pdf_pos;
     vec3 s_0_pdf_nrm;
+    uint s_0_flags;
     bool t_0_changed = false;
     uint idx_1 = -1;
     float idx_1_val;
@@ -287,18 +288,23 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
         s_0_pdf = light_vtx(0).pdf_fwd;
         s_0_pdf_pos = light_vtx(0).pos;
         s_0_pdf_nrm = light_vtx(0).n_s;
+        s_0_flags = light_vtx(0).light_flags;
         light_vtx(0).pdf_fwd = sampled.pdf_fwd;
         light_vtx(0).pos = sampled.pos;
         light_vtx(0).n_s = sampled.n_s;
+        light_vtx(0).light_flags = sampled.delta;
+        light_vtx(0).delta = uint(is_light_delta(sampled.delta));
         s_0_changed = true;
     }
     if (t == 1) {
         s_0_pdf = cam_vtx(0).pdf_fwd;
         s_0_pdf_pos = cam_vtx(0).pos;
         s_0_pdf_nrm = cam_vtx(0).n_s;
+        s_0_flags = cam_vtx(0).light_flags;
         cam_vtx(0).pdf_fwd = sampled.pdf_fwd;
         cam_vtx(0).pos = sampled.pos;
         cam_vtx(0).n_s = sampled.n_s;
+        cam_vtx(0).light_flags = sampled.delta;
         t_0_changed = true;
     }
     if (t > 0) {
@@ -307,7 +313,7 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
     }
     if (s > 0) {
         delta_s_old = light_vtx(s - 1).delta;
-        light_vtx(s - 1).delta = 0;
+        light_vtx(s - 1).delta = s == 1 ? sampled.delta: 0;
     }
 
     if (t > 0) {
@@ -438,11 +444,13 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
         light_vtx(0).pdf_fwd = s_0_pdf;
         light_vtx(0).pos = s_0_pdf_pos;
         light_vtx(0).n_s = s_0_pdf_nrm;
+        light_vtx(0).light_flags = s_0_flags;
     }
     if (t_0_changed) {
         cam_vtx(0).pdf_fwd = s_0_pdf;
         cam_vtx(0).pos = s_0_pdf_pos;
         cam_vtx(0).n_s = s_0_pdf_nrm;
+        cam_vtx(0).light_flags = s_0_flags;
     }
     if (idx_1 != -1) {
         cam_vtx(idx_1 - 1).pdf_rev = idx_1_val;
@@ -523,6 +531,10 @@ vec3 bdpt_connect_cam(int s, out ivec2 coords) {
 #undef light_vtx
 }
 
+// connects a path with the first s vertices from the lightpath
+// and the first t vertices from the camera path
+// eg. s == 1 means that we only consider the starting point of the light,
+// while t == 1 means that we only consider the starting point of the camera (the camera center)
 vec3 bdpt_connect(int s, int t) {
 #define cam_vtx(i) camera_verts.d[bdpt_path_idx + i]
 #define light_vtx(i) light_verts.d[bdpt_path_idx + i]
@@ -561,11 +573,11 @@ vec3 bdpt_connect(int s, int t) {
 #endif
 #else
         // copying things from the light_verts buffer
-        pos         = light_vtx(s - 1).pos;
-        pdf_pos_a   = light_vtx(s - 1).pdf_fwd;
-        n           = light_vtx(s - 1).n_s;
-        record.flags= light_vtx(s - 1).light_flags;
-        vec3 Le     = light_vtx(s - 1).throughput;
+        pos         = light_vtx(0).pos;
+        pdf_pos_a   = light_vtx(0).pdf_fwd;
+        n           = light_vtx(0).n_s;
+        record.flags= light_vtx(0).light_flags;
+        vec3 Le     = light_vtx(0).throughput;
         wi = pos - cam_vtx(t - 1).pos;
         wi_len = length(wi);
         wi /= wi_len;
@@ -596,7 +608,7 @@ vec3 bdpt_connect(int s, int t) {
                 sampled.pdf_fwd = pdf_pos_a / pc_ray.light_triangle_count;
                 sampled.pos = pos;
                 sampled.n_s = n;
-                sampled.delta = uint(is_light_delta(record.flags));
+                sampled.delta = record.flags;//uint(is_light_delta(record.flags));
                 L = cam_vtx(t - 1).throughput * f * abs(cos_x) * Le /
                     pdf_light_w;
             }
@@ -646,7 +658,7 @@ vec3 bdpt_connect(int s, int t) {
 #undef cam_vtx
 #undef light_vtx
     float mis_weight = 1.0f;
-    if (luminance(L) != 0.) {
+    if (luminance(L) != 0. && (sampled.delta == 0 || s + t != 3))  {
         mis_weight = calc_mis_weight(s, t, sampled);
 
         L *= mis_weight;

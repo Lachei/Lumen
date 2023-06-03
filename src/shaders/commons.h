@@ -607,7 +607,7 @@ struct SelectedReservoirs {
 
 struct LightResampleReservoir{
 	float w_sum;	// is the sum of p_hat / p
-	float w;		// servers as p_hat / p
+	float w;		// servers as p_hat
 	float p_h;		// needed for normalization
 	uint m;
 	vec3 pos;

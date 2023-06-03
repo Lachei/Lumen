@@ -151,17 +151,17 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     }
 
     // only inserting the pdf_pos as input as it incorporates already the light amount correction
-    float pdf_light = pdf_pos * pdf_dir;
+    float pdf_light = pdf_pos;// * pdf_dir;
     resampled = resample_light_temporal(pdf_light, pos, wi, n, Le);
     L = Le;
     original_pdf = pdf_light;
     cos_theta = abs(dot(n, wi));
 
-    light_pdf_pos = pdf_pos;
+    light_pdf_pos = pdf_light;//pdf_pos;
 
     light_verts.d[bdpt_path_idx].pos = pos;
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
-    light_verts.d[bdpt_path_idx].delta = 0;//uint(is_light_delta(light_record.flags));
+    light_verts.d[bdpt_path_idx].delta = uint(is_light_delta(light_record.flags));
     light_verts.d[bdpt_path_idx].dir = wi;
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_light;//pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
@@ -174,6 +174,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
         light_verts.d[bdpt_path_idx + 1].pdf_fwd =
             pdf_pos * abs(dot(wi, light_verts.d[bdpt_path_idx + 1].n_s));
     }
+    
     if (is_light_delta(light_record.flags)) {
         light_verts.d[bdpt_path_idx].pdf_fwd = 0;
     }
@@ -199,10 +200,7 @@ void main() {
 
     bool resampled;
     int num_light_paths = bdpt_generate_light_subpath_resampled(pc_ray.max_depth + 1, origin.xyz, resampled);
-    //if(true){
-    //    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(light_verts.d[bdpt_path_idx].throughput, 1));
-    //    return;
-    //}
+
     int num_cam_paths = bdpt_generate_camera_subpath(
         d, origin.xyz, pc_ray.max_depth + 1, cam_area);
     for (int t = 1; t <= num_cam_paths; t++) {
@@ -247,6 +245,6 @@ void main() {
     }
 
     // updating the temporal reservoirs
-    //if(!resampled)
+    if(!resampled)
         add_light_to_temporal(luminance(col), original_pdf, light_verts.d[bdpt_path_idx].pos, light_verts.d[bdpt_path_idx].dir, light_verts.d[bdpt_path_idx].n_s, L);
 }
