@@ -545,7 +545,7 @@ vec3 bdpt_connect(int s, int t) {
         vec3 pos;
         LightRecord record;
         float cos_y;
-#if 1
+#if 0
 #if BDPT_MLT == 1
         const vec4 rands_pos = vec4(
             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
@@ -569,8 +569,8 @@ vec3 bdpt_connect(int s, int t) {
         wi_len = length(wi);
         wi /= wi_len;
         cos_y     = max(dot(n, -wi), 0);
-        //if(!is_light_delta(record.flags))
-        //    Le *= 1. / cos_y;//pdf_pos_a / cos_y;
+        if(!is_light_delta(record.flags))
+            Le *= 1. / cos_y;//pdf_pos_a / cos_y;
 #endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =

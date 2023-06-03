@@ -66,23 +66,6 @@ bool is_light_delta(uint light_props) {
 
 uint get_light_type(uint light_props) { return uint((light_props & 0x7)); }
 
-float light_pdf(const Light light, const vec3 n_s, const vec3 wi) {
-    const float cos_width = cos(30 * PI / 180);
-    uint light_type = get_light_type(light.light_flags);
-    switch (light_type) {
-    case LIGHT_AREA: {
-        return max(dot(n_s, wi) / PI, 0);
-    } break;
-    case LIGHT_SPOT: {
-        return uniform_cone_pdf(cos_width);
-    } break;
-    case LIGHT_DIRECTIONAL: 
-    case LIGHT_ENVIRONMENT: {
-        return 0;
-    } break;
-    }
-}
-
 float light_pdf_a_to_w(const uint light_flags, const float pdf_a,
                        const vec3 n_s, const float wi_len_sqr,
                        const float cos_from_light) {
@@ -117,6 +100,10 @@ float light_pdf(uint light_flags, const vec3 n_s, const vec3 wi) {
         return 0;
     }
     }
+}
+
+float light_pdf(const Light light, const vec3 n_s, const vec3 wi) {
+    return light_pdf(light.light_flags, n_s, wi);
 }
 
 float light_pdf_Le(uint light_flags, const vec3 n_s, const vec3 wi) {
@@ -294,12 +281,12 @@ vec3 sample_light_env_Le(const vec4 rands_dir, const vec3 world_center,
     wi.y = cos(theta) * sqrt(1 - z2);
     vec2 uv = to_spherical(-wi);
     pos = world_center + env_lobe_dist * -wi;   // always place the sample far far away
-    pdf_pos = INV_PI * INV_PI * 0.25;           // 1 / (4pi^2) = surface of a sphere
+    pdf_pos = INV_PI * 0.25 / (env_lobe_dist * env_lobe_dist);                    // 1 / (4pi) = surface of a sphere
 
     // importance sample the himisphere at pos in the direction of the ray
     vec3 w_dir = wi;
     wi = sample_cos_hemisphere(rands_dir.zw, w_dir);
-    pdf_dir = dot(w_dir, wi) / (INV_PI * INV_PI * .5);
+    pdf_dir = dot(w_dir, wi) * INV_PI * .5;
     
     return light_multiplier * texture(scene_textures[env_tex_idx], uv).xyz;// * env_lobe_dist * env_lobe_dist;
 }
@@ -316,7 +303,7 @@ vec3 sample_light_env_Li(const vec2 rands_dir, const vec3 world_center,
     wi.y = cos(theta) * sqrt(1 - z2);
     vec2 uv = to_spherical(wi);
     pos = world_center + env_lobe_dist * -wi;   // always place the sample far far away
-    pdf_pos = INV_PI * INV_PI * 0.25;           // 1 / (4pi^2) = surface of a sphere
+    pdf_pos = INV_PI * 0.25 / (env_lobe_dist * env_lobe_dist);                    // 1 / (4pi) = surface of a sphere
 
     // for Li no hemisphere direction sampling needed
     
