@@ -222,7 +222,7 @@ int bdpt_generate_light_subpath(int max_depth) {
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;
     vec3 throughput =
-        Le * cos_theta / (pdf_dir * pdf_pos);
+        Le * cos_theta / (pdf_dir * light_verts.d[bdpt_path_idx + 0].pdf_fwd);
     light_verts.d[bdpt_path_idx + 0].throughput = Le;
     int num_light_verts =
         bdpt_random_walk_light(max_depth - 1, throughput, pdf_dir) + 1;
@@ -268,7 +268,6 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
     float s_0_pdf;
     vec3 s_0_pdf_pos;
     vec3 s_0_pdf_nrm;
-    uint s_0_flags;
     bool t_0_changed = false;
     uint idx_1 = -1;
     float idx_1_val;
@@ -288,23 +287,18 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
         s_0_pdf = light_vtx(0).pdf_fwd;
         s_0_pdf_pos = light_vtx(0).pos;
         s_0_pdf_nrm = light_vtx(0).n_s;
-        s_0_flags = light_vtx(0).light_flags;
         light_vtx(0).pdf_fwd = sampled.pdf_fwd;
         light_vtx(0).pos = sampled.pos;
         light_vtx(0).n_s = sampled.n_s;
-        light_vtx(0).light_flags = sampled.delta;
-        light_vtx(0).delta = uint(is_light_delta(sampled.delta));
         s_0_changed = true;
     }
     if (t == 1) {
         s_0_pdf = cam_vtx(0).pdf_fwd;
         s_0_pdf_pos = cam_vtx(0).pos;
         s_0_pdf_nrm = cam_vtx(0).n_s;
-        s_0_flags = cam_vtx(0).light_flags;
         cam_vtx(0).pdf_fwd = sampled.pdf_fwd;
         cam_vtx(0).pos = sampled.pos;
         cam_vtx(0).n_s = sampled.n_s;
-        cam_vtx(0).light_flags = sampled.delta;
         t_0_changed = true;
     }
     if (t > 0) {
@@ -313,7 +307,7 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
     }
     if (s > 0) {
         delta_s_old = light_vtx(s - 1).delta;
-        light_vtx(s - 1).delta = s == 1 ? sampled.delta: 0;
+        light_vtx(s - 1).delta = 0;
     }
 
     if (t > 0) {
@@ -444,13 +438,11 @@ float calc_mis_weight(int s, int t, const in PathVertex sampled) {
         light_vtx(0).pdf_fwd = s_0_pdf;
         light_vtx(0).pos = s_0_pdf_pos;
         light_vtx(0).n_s = s_0_pdf_nrm;
-        light_vtx(0).light_flags = s_0_flags;
     }
     if (t_0_changed) {
         cam_vtx(0).pdf_fwd = s_0_pdf;
         cam_vtx(0).pos = s_0_pdf_pos;
         cam_vtx(0).n_s = s_0_pdf_nrm;
-        cam_vtx(0).light_flags = s_0_flags;
     }
     if (idx_1 != -1) {
         cam_vtx(idx_1 - 1).pdf_rev = idx_1_val;
@@ -531,10 +523,6 @@ vec3 bdpt_connect_cam(int s, out ivec2 coords) {
 #undef light_vtx
 }
 
-// connects a path with the first s vertices from the lightpath
-// and the first t vertices from the camera path
-// eg. s == 1 means that we only consider the starting point of the light,
-// while t == 1 means that we only consider the starting point of the camera (the camera center)
 vec3 bdpt_connect(int s, int t) {
 #define cam_vtx(i) camera_verts.d[bdpt_path_idx + i]
 #define light_vtx(i) light_verts.d[bdpt_path_idx + i]
@@ -550,7 +538,6 @@ vec3 bdpt_connect(int s, int t) {
             L = vec3(1, 1, 1) * cam_vtx(t - 1).throughput;
         }
     } else if (s == 1) {
-        // currently not used (Eval G should do the correct things already)
         vec3 wi;
         float wi_len;
         float pdf_pos_a;
@@ -558,7 +545,7 @@ vec3 bdpt_connect(int s, int t) {
         vec3 pos;
         LightRecord record;
         float cos_y;
-#if 0
+#if 1
 #if BDPT_MLT == 1
         const vec4 rands_pos = vec4(
             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
@@ -567,7 +554,7 @@ vec3 bdpt_connect(int s, int t) {
             sample_light_Li(rands_pos, cam_vtx(t - 1).pos, pc_ray.num_lights,
                             wi, wi_len, n, pos, pdf_pos_a, cos_y, record);
 #else
-        const vec3 Le =// vec3(0);    // disabling direct lighting
+        const vec3 Le =
             sample_light_Li(seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
                             wi_len, n, pos, pdf_pos_a, cos_y, record);
 #endif
@@ -608,7 +595,7 @@ vec3 bdpt_connect(int s, int t) {
                 sampled.pdf_fwd = pdf_pos_a / pc_ray.light_triangle_count;
                 sampled.pos = pos;
                 sampled.n_s = n;
-                sampled.delta = record.flags;//uint(is_light_delta(record.flags));
+                sampled.delta = uint(is_light_delta(record.flags));
                 L = cam_vtx(t - 1).throughput * f * abs(cos_x) * Le /
                     pdf_light_w;
             }
@@ -628,16 +615,9 @@ vec3 bdpt_connect(int s, int t) {
                                                  light_vtx(s - 1).uv);
 
             vec3 wo_1 = normalize(cam_vtx(t - 2).pos - cam_vtx(t - 1).pos);
-            vec3 brdf1 = eval_bsdf(mat_1, wo_1, d, cam_vtx(t - 1).n_s);
-            vec3 brdf2;
-            if(s == 1){
-                G = dot(n_t, d);
-                brdf2 = vec3(1);
-            }
-            else{
-                vec3 wo_2 = normalize(light_vtx(s - 2).pos - light_vtx(s - 1).pos);
-                brdf2 = eval_bsdf(mat_2, wo_2, -d, light_vtx(s - 1).n_s);
-            }
+            vec3 wo_2 = normalize(light_vtx(s - 2).pos - light_vtx(s - 1).pos);
+            const vec3 brdf1 = eval_bsdf(mat_1, wo_1, d, cam_vtx(t - 1).n_s);
+            const vec3 brdf2 = eval_bsdf(mat_2, wo_2, -d, light_vtx(s - 1).n_s);
             if (brdf1 != vec3(0) && brdf2 != vec3(0)) {
                 vec3 ray_origin =
                     offset_ray2(cam_vtx(t - 1).pos, cam_vtx(t - 1).n_s);
@@ -658,7 +638,7 @@ vec3 bdpt_connect(int s, int t) {
 #undef cam_vtx
 #undef light_vtx
     float mis_weight = 1.0f;
-    if (luminance(L) != 0. && (sampled.delta == 0 || s + t != 3))  {
+    if (luminance(L) != 0.) {
         mis_weight = calc_mis_weight(s, t, sampled);
 
         L *= mis_weight;

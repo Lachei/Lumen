@@ -119,7 +119,7 @@ void VCM::init() {
 
 void VCM::render() {
 	const float radius_factor = static_cast<float>(json_util::get_or(integrator_config, "radius_factor", 1.));//static_cast<float>(integrator_config["radius_factor"]);
-	const int enable_vm 	  = json_util::get_or(integrator_config, "enable_vm", 1);
+	const int enable_vm 	  = json_util::get_or(integrator_config, "enable_vm", 0);
 
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	const float ppm_base_radius = 0.25f;
