@@ -83,10 +83,10 @@ void BDPTResampled::render() {
 		assert(file);
 		// header line
 		file << "pos_x,pos_y,pos_z,d_x,d_y,d_z,n_x,n_y,n_z,w_sum,w,m\n";
-		for(const auto& r: reservoirs)
-			// assembling the line for writeout
-			file << r.pos.x << ',' << r.pos.y << ',' << r.pos.z << ',' << r.dir.x << ',' << r.dir.y << ',' << r.dir.z << ','
-				 << r.n.x << ',' << r.n.y << ',' << r.n.z << ',' << r.w_sum << ',' << r.w << ',' << r.m << '\n';
+		//for(const auto& r: reservoirs)
+		//	// assembling the line for writeout
+		//	file << r.pos.x << ',' << r.pos.y << ',' << r.pos.z << ',' << r.dir.x << ',' << r.dir.y << ',' << r.dir.z << ','
+		//		 << r.n.x << ',' << r.n.y << ',' << r.n.z << ',' << r.w_sum << ',' << r.w << ',' << r.m << '\n';
 	}
 	
 
