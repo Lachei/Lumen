@@ -142,10 +142,15 @@ uvec4 init_rng(uvec2 pixel_coords, uvec2 resolution, uint frame_num, uint time) 
     return uvec4(pixel_coords.xy, frame_num, time);
 }
 
+void rng_advance_state(inout uvec4 rng_state){
+    rng_state.w++;
+    pcg4d(rng_state);
+}
+
 // Return random float in (0, 1) range
 float rand(inout uvec4 rng_state) {
-    rng_state.w++;
-    return uint_to_float(pcg4d(rng_state).x);
+    rng_advance_state(rng_state);
+    return uint_to_float(rng_state.x);
 }
 
 // Creates a quaternion s.t the unit vector v becomes (0,0,1)

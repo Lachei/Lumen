@@ -610,10 +610,11 @@ struct LightResampleReservoir{
 	float w;		// servers as p_hat
 	float p_h;		// needed for normalization
 	uint m;
-	vec3 pos;
-	vec3 dir;
-	vec3 n;	// might need the normal as well...
-	vec3 L;
+	uvec4 seed;		// light is stored as the seed for efficient storage
+	//vec3 pos;
+	//vec3 dir;
+	//vec3 n;	// might need the normal as well...
+	//vec3 L;
 };
 
 struct LightState {

@@ -60,7 +60,7 @@ void SPPM::init() {
 }
 
 void SPPM::render() {
-	const float base_radius = static_cast<float>(integrator_config["base_radius"]);
+	const float base_radius = static_cast<float>(integrator_config.value("base_radius", 1.));
 
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc_ray.num_lights = int(lights.size());

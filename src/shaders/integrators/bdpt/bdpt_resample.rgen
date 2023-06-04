@@ -34,6 +34,7 @@ const float tmax = 10000.0;
 uint pixel_idx = (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y);
 uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
                       pc_ray.frame_num ^ pc_ray.time);
+uvec4 light_start_seed;
 #include "../bdpt_commons.glsl"
 #include "../bdpt_resampling_commons.glsl"
 
@@ -151,7 +152,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
     }
 
     // only inserting the pdf_pos as input as it incorporates already the light amount correction
-    float pdf_light = pdf_pos;// * pdf_dir;
+    float pdf_light = pdf_pos * pdf_dir;
     resampled = resample_light_temporal(pdf_light, pos, wi, n, Le);
     L = Le;
     original_pdf = pdf_light;
@@ -161,7 +162,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
 
     light_verts.d[bdpt_path_idx].pos = pos;
     light_verts.d[bdpt_path_idx].light_flags = light_record.flags;
-    light_verts.d[bdpt_path_idx].delta = uint(is_light_delta(light_record.flags));
+    light_verts.d[bdpt_path_idx].delta = 0;//uint(is_light_delta(light_record.flags));
     light_verts.d[bdpt_path_idx].dir = wi;
     light_verts.d[bdpt_path_idx].pdf_fwd = pdf_light;//pdf_pos;
     light_verts.d[bdpt_path_idx].n_s = n;

@@ -6,42 +6,30 @@
 #define store_light_resampled(array, reservoir) array.d[pixel_idx].w_sum = reservoir.w_sum;\
     array.d[pixel_idx].w = reservoir.w;\
     array.d[pixel_idx].m = reservoir.m;\
-    array.d[pixel_idx].pos = reservoir.pos;\
-    array.d[pixel_idx].dir = reservoir.dir;\
-    array.d[pixel_idx].n = reservoir.n;\
-    array.d[pixel_idx].L = reservoir.L;\
+    array.d[pixel_idx].seed = reservoir.seed;\
     array.d[pixel_idx].p_h = reservoir.p_h;
 
 #define store_light_resampled_idx(array, reservoir, idx) array.d[idx].w_sum = reservoir.w_sum;\
     array.d[idx].w = reservoir.w;\
     array.d[idx].m = reservoir.m;\
-    array.d[idx].pos = reservoir.pos;\
-    array.d[idx].dir = reservoir.dir;\
-    array.d[idx].n = reservoir.n;\
-    array.d[idx].L = reservoir.L;\
+    array.d[idx].seed = reservoir.seed;\
     array.d[idx].p_h = reservoir.p_h;
 
 #define load_light_resampled(array, reservoir) reservoir.w_sum = array.d[pixel_idx].w_sum;\
     reservoir.w = array.d[pixel_idx].w;\
     reservoir.m = array.d[pixel_idx].m;\
-    reservoir.pos = array.d[pixel_idx].pos;\
-    reservoir.dir = array.d[pixel_idx].dir;\
-    reservoir.n = array.d[pixel_idx].n;\
-    reservoir.L = array.d[pixel_idx].L;\
+    reservoir.seed = array.d[pixel_idx].seed;\
     reservoir.p_h = array.d[pixel_idx].p_h;
 
 #define load_light_resampled_idx(array, reservoir, idx) reservoir.w_sum = array.d[idx].w_sum;\
     reservoir.w = array.d[idx].w;\
     reservoir.m = array.d[idx].m;\
-    reservoir.pos = array.d[idx].pos;\
-    reservoir.dir = array.d[idx].dir;\
-    reservoir.n = array.d[idx].n;\
-    reservoir.L = array.d[idx].L;\
+    reservoir.seed = array.d[idx].seed;\
     reservoir.p_h = array.d[idx].p_h;
 
 // Adds a new sample to the reservoir. The reservoir is updated inplace
 // @return true if the new sample is the new active sample
-bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in vec3 pos, in vec3 dir, in vec3 n, in vec3 L, float p_h){
+bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float weight, in uvec4 seed, float p_h){
     float rand = rand(seed);
     reservoir.w_sum += weight;
     reservoir.m     += 1;
@@ -50,10 +38,7 @@ bool reservoir_add_light_sample(inout LightResampleReservoir reservoir, in float
         // sample should be exchanged with the current sample
         reservoir.w = weight;
         reservoir.p_h = p_h;
-        reservoir.pos = pos;
-        reservoir.dir = dir;
-        reservoir.n = n;
-        reservoir.L = L;
+        reservoir.seed = seed;
         return true;
     }
     return false;
@@ -69,10 +54,7 @@ bool reservoirs_combine(inout LightResampleReservoir a, in LightResampleReservoi
     if(rand <= frac){
         a.w = b.w;
         a.p_h = b.p_h;
-        a.pos = b.pos;
-        a.dir = b.dir;
-        a.n = b.n;
-        a.L = b.L;
+        a.seed = b.seed;
         return true;
     }
     return false;
