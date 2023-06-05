@@ -566,7 +566,7 @@ vec3 bdpt_connect(int s, int t) {
             sample_light_Li(seed_copy, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
                             wi_len, n, pos, pdf_pos_a, cos_y, record);
         pdf_pos_a = light_pdf_pos;
-        same = length(pos - start_pos) < 1;
+        same = pos == start_pos;
         
 #endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));

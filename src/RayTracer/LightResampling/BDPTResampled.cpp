@@ -2,11 +2,12 @@
 #include "BDPTResampled.h"
 #include <ranges>
 
-#define DEBUG_RESAMPLE_POSITIONS
-#define DEBUG_RESAMPLE_WEIGHTS
+#define DEBUG_RESAMPLE
 
-#ifdef DEBUG_RESAMPLE_POSITIONS
+//#ifdef DEBUG_RESAMPLE
 Buffer resample_positions;
+struct Weights{float w, w_sum, p_h; uint m;};
+Buffer resample_weights;	// contains weights as well as weight sum p_hat and m (tuple of <float, float, float, uint>)
 #endif
 
 template<typename T>
@@ -36,23 +37,29 @@ void BDPTResampled::init() {
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
 
 	global_light_spatial_reservoir_buffer.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
 	
-#ifdef DEBUG_RESAMPLE_POSITIONS
+#ifdef DEBUG_RESAMPLE
 	resample_positions.create(
 		&instance->vkb.ctx,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE,
 			instance->width * instance->height * sizeof(vec3));
+	resample_weights.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE,
+			instance->width * instance->height * sizeof(Weights));
 #endif
 
 	SceneDesc desc;
@@ -68,6 +75,11 @@ void BDPTResampled::init() {
 	desc.color_storage_addr = color_storage_buffer.get_device_address();
 	desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
 	desc.global_light_spatial_addr = global_light_spatial_reservoir_buffer.get_device_address();
+
+#ifdef DEBUG_RESAMPLE
+	desc.debug_resample_positions_addr = resample_positions.get_device_address();
+	desc.debug_resample_weights_addr = resample_weights.get_device_address();
+#endif
 
 	scene_desc_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -85,26 +97,36 @@ void BDPTResampled::init() {
 }
 
 void BDPTResampled::render() {
-	constexpr bool use_spatial_reservoirs = true;
+	constexpr bool use_spatial_reservoirs = false;
 
-	if(false && pc_ray.frame_num < 10){
+#ifdef DEBUG_RESAMPLE
+	if(pc_ray.frame_num && pc_ray.frame_num < 10){
 		std::cout << "Light reservoir output for frame " << pc_ray.frame_num << std::endl;
-		Buffer& gpu_reservoirs = global_light_spatial_reservoir_buffer;
-		gpu_reservoirs.map(); // maps the memory to the data pointer
-		std::vector<LightResampleReservoir> reservoirs(instance->width * instance->height);
-		LightResampleReservoir* data_p = reinterpret_cast<LightResampleReservoir*>(gpu_reservoirs.data);
-		std::copy(data_p, data_p + reservoirs.size(), reservoirs.begin());
-		gpu_reservoirs.unmap();
-		// writeout into csv file
-		std::ofstream file("reservoirs/spatial" + std::to_string(pc_ray.frame_num) + ".csv");
+
+		std::ofstream file("reservoirs/temporal" + std::to_string(pc_ray.frame_num) + ".csv");
 		assert(file);
-		// header line
-		file << "pos_x,pos_y,pos_z,d_x,d_y,d_z,n_x,n_y,n_z,w_sum,w,m\n";
-		//for(const auto& r: reservoirs)
-		//	// assembling the line for writeout
-		//	file << r.pos.x << ',' << r.pos.y << ',' << r.pos.z << ',' << r.dir.x << ',' << r.dir.y << ',' << r.dir.z << ','
-		//		 << r.n.x << ',' << r.n.y << ',' << r.n.z << ',' << r.w_sum << ',' << r.w << ',' << r.m << '\n';
+
+		file << "pos_x,pos_y,pos_z,w_sum,w,p_h,m\n";
+
+		resample_positions.map(); // maps the memory to the data pointer
+		std::vector<vec3> reservoir_positons(instance->width * instance->height);
+		vec3* data_p = reinterpret_cast<vec3*>(resample_positions.data);
+		std::copy(data_p, data_p + reservoir_positons.size(), reservoir_positons.begin());
+		resample_positions.unmap();
+
+		resample_weights.map();
+		std::vector<Weights> reservoir_weights(reservoir_positons.size());
+		Weights* weight_p = reinterpret_cast<Weights*>(resample_weights.data);
+		std::copy(weight_p, weight_p + reservoir_weights.size(), reservoir_weights.begin());
+		resample_weights.unmap();
+		// writeout into csv file
+		for(size_t i: std::views::iota(size_t(0), reservoir_positons.size()))
+			// assembling the line for writeout			
+			file << reservoir_positons[i].x << ',' << reservoir_positons[i].y << ',' << reservoir_positons[i].z << ','
+				 << reservoir_weights[i].w << ',' << reservoir_weights[i].w_sum << ',' << reservoir_weights[i].p_h << ',' << reservoir_weights[i].m << '\n';
+		
 	}
+#endif
 	
 
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);

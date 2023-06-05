@@ -48,16 +48,29 @@ void main(){
     int mult = int(rand(seed) * max_mult) + 1;
     int step_size = max(mult / steps, 1);
 
-    for(int i = -mult; i <= mult; i += step_size){
-        for(int j = -mult; j <= mult; j += step_size){
-            if((i == 0 && j == 0) || pixel_x + i < 0 || pixel_x + i >= pc_ray.size_x ||
-                pixel_y + j < 0 || pixel_y + j >= pc_ray.size_y)
-                continue;
-            const uint idx = pixel_xy2idx(pixel_x + i, pixel_y + j);
-            LightResampleReservoir neighbour;
-            load_light_resampled_idx(light_temporal_reservoirs, neighbour, idx);
-            reservoirs_combine(cur_reservoir, neighbour);
-        }
+    //for(int i = -mult; i <= mult; i += step_size){
+    //    for(int j = -mult; j <= mult; j += step_size){
+    //        if((i == 0 && j == 0) || pixel_x + i < 0 || pixel_x + i >= pc_ray.size_x ||
+    //            pixel_y + j < 0 || pixel_y + j >= pc_ray.size_y)
+    //            continue;
+    //        const uint idx = pixel_xy2idx(pixel_x + i, pixel_y + j);
+    //        LightResampleReservoir neighbour;
+    //        load_light_resampled_idx(light_temporal_reservoirs, neighbour, idx);
+    //        reservoirs_combine(cur_reservoir, neighbour);
+    //    }
+    //}
+
+    for(int i = 0; i < 100; ++i){
+        const float dist = sqrt(rand(seed));
+        const float angle = rand(seed) * PI2;
+        ivec2 off = ivec2((vec2(sin(angle), cos(angle)) * dist) * max_mult);
+        if(pixel_x + off.x < 0 || pixel_x + off.x >= pc_ray.size_x ||
+            pixel_y + off.y < 0 || pixel_y + off.y >= pc_ray.size_y)
+            continue;
+        LightResampleReservoir neighbour;
+        const uint idx = pixel_xy2idx(pixel_x + off.x, pixel_y + off.y);
+        load_light_resampled_idx(light_temporal_reservoirs, neighbour, idx);
+        reservoirs_combine(cur_reservoir, neighbour);
     }
 
     store_light_resampled(light_spatial_reservoirs, cur_reservoir);

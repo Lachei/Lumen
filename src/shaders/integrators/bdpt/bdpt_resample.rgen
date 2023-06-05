@@ -16,11 +16,21 @@ layout(buffer_reference, scalar) buffer CameraVertices { PathVertex d[]; };
 layout(buffer_reference, scalar) buffer ColorStorages { vec3 d[]; };
 layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
 
+//TODO remove after debugging
+layout(buffer_reference, scalar) buffer LightResampledPositions { vec3 d[];};
+struct Weights {float w, w_sum, p_h; uint m;};
+layout(buffer_reference, scalar) buffer LightResampledWeights { Weights d[];};
+LightResampledPositions light_resampled_positions = LightResampledPositions(scene_desc.debug_resample_positions_addr);
+LightResampledWeights light_resampled_weights = LightResampledWeights(scene_desc.debug_resample_weights_addr);
+
+
 LightVertices light_verts = LightVertices(scene_desc.light_path_addr);
 CameraVertices camera_verts = CameraVertices(scene_desc.camera_path_addr);
 ColorStorages tmp_col = ColorStorages(scene_desc.color_storage_addr);
 LightResampledReservoirs light_resampled_reservoirs = LightResampledReservoirs(scene_desc.global_light_reservoirs_addr);
 LightResampledReservoirs light_spatial_reservoirs = LightResampledReservoirs(scene_desc.global_light_spatial_addr);
+
+
 
 uint screen_size = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
 uint bdpt_path_idx =
@@ -36,8 +46,11 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
                       pc_ray.frame_num ^ pc_ray.time);
 #define BDPT_RESAMPLE
 uvec4 light_start_seed;
+
+//TODO remvoe after debugging
 vec3 start_pos;
 bool same = true;
+Weights start_weights;
 #include "../bdpt_commons.glsl"
 #include "../bdpt_resampling_commons.glsl"
 
@@ -75,6 +88,12 @@ bool resample_light_temporal(inout float light_pdf, inout uvec4 seed){
     bool resampled = reservoir_add_light_sample(reservoir, light_weight, seed, p_h);
     seed = reservoir.seed;
 
+    //TODO remove after debugging
+    start_weights.w = reservoir.w;
+    start_weights.w_sum = reservoir.w_sum;
+    start_weights.p_h = reservoir.p_h;
+    start_weights.m = reservoir.m;
+
     //if(resampled)
     //    // if resampled exchange the p_h value stored in the w component of the reservoir
     //    // p_h can be retrieved from teh light_weight as light_weight was chosen such that it would be the average weight for resampling
@@ -105,9 +124,11 @@ void add_light_to_temporal(float luminance, float sampling_pdf, uvec4 seed){
         load_light_resampled(light_resampled_reservoirs, reservoir);
     }
     // TODO maybe recheck
-    luminance = clamp(luminance, .01, 1000);   // avoiding bias
-    //if(luminance < .001) // small luminances are simply ignored to avoid bias
-    //    return;
+    luminance = clamp(luminance, .001, 100);   // avoiding bias
+    if(luminance < .01) { // small luminances are simply ignored to avoid bias
+        store_light_resampled(light_resampled_reservoirs, reservoir);   
+        return;
+    }
     
     const float p_h = luminance * sampling_pdf; // the luminance is the integral evaluated at the sample normalized by the sampling probability. So this unnormalizes the luminance to the target function
     reservoir_add_light_sample(reservoir, luminance, seed, p_h);
@@ -241,8 +262,8 @@ void main() {
     if (isnan(luminance(col)))
         col = vec3(0);
 
-    if(!same)
-        col = vec3(1, 0  , 0);
+    //if(!same)
+    //    col = vec3(1, 0  , 0);
     
     if (pc_ray.frame_num > 0) {
         float w = 1. / float(pc_ray.frame_num + 1);
@@ -255,6 +276,10 @@ void main() {
     }
 
     // updating the temporal reservoirs
-    if(!resampled)
+    //if(!resampled)
         add_light_to_temporal(luminance(col), light_pdf_pos, light_start_seed);
+
+    //TODO remove after debugging
+    light_resampled_positions.d[pixel_idx] = start_pos;
+    light_resampled_weights.d[pixel_idx] = start_weights;
 }
