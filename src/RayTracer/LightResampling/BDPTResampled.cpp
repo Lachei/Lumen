@@ -97,7 +97,7 @@ void BDPTResampled::init() {
 }
 
 void BDPTResampled::render() {
-	constexpr bool use_spatial_reservoirs = false;
+	constexpr bool use_spatial_reservoirs = true;
 
 #ifdef DEBUG_RESAMPLE
 	if(pc_ray.frame_num && pc_ray.frame_num < 10){

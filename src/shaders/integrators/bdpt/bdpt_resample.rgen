@@ -125,10 +125,10 @@ void add_light_to_temporal(float luminance, float sampling_pdf, uvec4 seed){
     }
     // TODO maybe recheck
     luminance = clamp(luminance, .001, 100);   // avoiding bias
-    if(luminance < .01) { // small luminances are simply ignored to avoid bias
-        store_light_resampled(light_resampled_reservoirs, reservoir);   
-        return;
-    }
+    //if(luminance < .01) { // small luminances are simply ignored to avoid bias
+    //    store_light_resampled(light_resampled_reservoirs, reservoir);   
+    //    return;
+    //}
     
     const float p_h = luminance * sampling_pdf; // the luminance is the integral evaluated at the sample normalized by the sampling probability. So this unnormalizes the luminance to the target function
     reservoir_add_light_sample(reservoir, luminance, seed, p_h);
