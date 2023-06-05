@@ -144,7 +144,7 @@ uvec4 init_rng(uvec2 pixel_coords, uvec2 resolution, uint frame_num, uint time) 
 
 void rng_advance_state(inout uvec4 rng_state){
     rng_state.w++;
-    pcg4d(rng_state);
+    rng_state = pcg4d(rng_state);
 }
 
 // Return random float in (0, 1) range

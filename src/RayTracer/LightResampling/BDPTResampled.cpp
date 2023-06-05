@@ -1,6 +1,14 @@
 #include "../../LumenPCH.h"
 #include "BDPTResampled.h"
 #include <ranges>
+
+#define DEBUG_RESAMPLE_POSITIONS
+#define DEBUG_RESAMPLE_WEIGHTS
+
+#ifdef DEBUG_RESAMPLE_POSITIONS
+Buffer resample_positions;
+#endif
+
 template<typename T>
 inline std::ranges::iota_view<size_t> s_range(const T& v){return std::ranges::iota_view(size_t(0), v.size());}
 
@@ -37,6 +45,15 @@ void BDPTResampled::init() {
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
+	
+#ifdef DEBUG_RESAMPLE_POSITIONS
+	resample_positions.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_SHARING_MODE_EXCLUSIVE,
+			instance->width * instance->height * sizeof(vec3));
+#endif
 
 	SceneDesc desc;
 	desc.vertex_addr = vertex_buffer.get_device_address();
@@ -125,12 +142,9 @@ void BDPTResampled::render() {
 					 .macros = std::move(resample_macros),
 					 .dims = {instance->width, instance->height},
 					 .accel = instance->vkb.tlas.accel})
-		.zero(light_path_buffer)
-		.zero(camera_path_buffer)
-		//.read(light_path_buffer) // Needed if shader inference is disabled
-		//.read(camera_path_buffer)
+		//.zero(light_path_buffer)
+		//.zero(camera_path_buffer)
 		.push_constants(&pc_ray)
-		//.write(output_tex)
 		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			scene_ubo_buffer,

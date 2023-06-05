@@ -545,7 +545,7 @@ vec3 bdpt_connect(int s, int t) {
         vec3 pos;
         LightRecord record;
         float cos_y;
-#ifndef HHHHHH
+#ifndef BDPT_RESAMPLE
 #if BDPT_MLT == 1
         const vec4 rands_pos = vec4(
             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
@@ -561,9 +561,13 @@ vec3 bdpt_connect(int s, int t) {
 #else
         // creating the light starting position form the stored seed
         // light_start_seed is defined in bdpt_resample.rgen
+        uvec4 seed_copy = light_start_seed;
         const vec3 Le =
-            sample_light_Li(light_start_seed, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
+            sample_light_Li(seed_copy, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
                             wi_len, n, pos, pdf_pos_a, cos_y, record);
+        pdf_pos_a = light_pdf_pos;
+        same = length(pos - start_pos) < 1;
+        
 #endif
         const float cos_x = abs(dot(wi, cam_vtx(t - 1).n_s));
         const vec3 ray_origin =
