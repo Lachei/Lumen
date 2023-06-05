@@ -2,9 +2,9 @@
 #include "BDPTResampled.h"
 #include <ranges>
 
-#define DEBUG_RESAMPLE
+//#define DEBUG_RESAMPLE
 
-//#ifdef DEBUG_RESAMPLE
+#ifdef DEBUG_RESAMPLE
 Buffer resample_positions;
 struct Weights{float w, w_sum, p_h; uint m;};
 Buffer resample_weights;	// contains weights as well as weight sum p_hat and m (tuple of <float, float, float, uint>)

@@ -280,6 +280,6 @@ void main() {
         add_light_to_temporal(luminance(col), light_pdf_pos, light_start_seed);
 
     //TODO remove after debugging
-    light_resampled_positions.d[pixel_idx] = start_pos;
-    light_resampled_weights.d[pixel_idx] = start_weights;
+    //light_resampled_positions.d[pixel_idx] = start_pos;
+    //light_resampled_weights.d[pixel_idx] = start_weights;
 }
