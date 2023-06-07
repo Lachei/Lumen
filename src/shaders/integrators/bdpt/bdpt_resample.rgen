@@ -47,7 +47,7 @@ uint pixel_idx = (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y);
 uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
                       pc_ray.frame_num ^ pc_ray.time);
 const uint reduction_fac = 2;   // HAS to be consistent with reduction_fac in BDPTResampled.cpp
-uint light_spawn_idx = (gl_LaunchIDEXT.x / reduction_fac * (screen_size.y + 1) / reduction_fac + gl_LaunchIDEXT.y / reduction_fac);
+uint light_spawn_idx = (gl_LaunchIDEXT.x / reduction_fac * (gl_LaunchSizeEXT.y + 1) / reduction_fac + gl_LaunchIDEXT.y / reduction_fac);
 #define BDPT_RESAMPLE
 uvec4 light_start_seed;
 
@@ -176,7 +176,7 @@ int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_or
 //    // only inserting the pdf_pos as input as it incorporates already the light amount correction
 //    // resampled is true if the current seed is picked, false else
 //    resampled = resample_light_temporal(pdf_pos, light_start_seed);//
-
+    
 //    uvec4 seed_copy = light_start_seed;
 //    float dummy;
 //    if(!resampled)   // resample but dont override the pdf_pos as it was set in resample_light_temporal(...), thus insert dummy for pdf_light

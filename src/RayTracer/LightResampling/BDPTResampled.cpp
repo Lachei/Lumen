@@ -23,8 +23,8 @@ Buffer resample_weights;	// contains weights as well as weight sum p_hat and m (
 template<typename T>
 inline std::ranges::iota_view<size_t> s_range(const T& v){return std::ranges::iota_view(size_t(0), v.size());}
 
+constexpr uint32_t reduction_fac = 2;
 void BDPTResampled::init() {
-	constexpr uint32_t reduction_fac = 2;
 	light_spawn_position_width = (instance->width + reduction_fac - 1) / reduction_fac;
 	light_spawn_position_height = (instance->height + reduction_fac - 1) / reduction_fac;
 
@@ -171,31 +171,30 @@ void BDPTResampled::render() {
 	
 	// executing the spatial resampling
 	const uint32_t spatial_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f));
+	const uint32_t reduced_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f / reduction_fac / reduction_fac));
 	std::vector<ShaderMacro> resample_macros;
-	if(use_spatial_reservoirs){
-		instance->vkb.rg
-			->add_compute("Spatial Resample", {.shader = Shader("src/shaders/integrators/bdpt/bdpt_resample_spatial.comp"),
-											   .dims = {spatial_dim_x, 1, 1}})
-			.push_constants(&pc_ray)
-			.bind(scene_desc_buffer);
-		resample_macros.emplace_back("USE_SPATIAL_RESERVOIRS");
-	}
+	if(use_spatial_reservoirs)
+		resample_macros.emplace_back("USE_SPATIAL_RESERVOIRS", "BDPT_RESAMPLE");
+
+	// create the new sample
+	instance->vkb.rg
+		->add_compute("Spatial Resample", {.shader = Shader("src/shaders/integrators/bdpt/bdpt_resample_spatial.comp"),
+											.dims = {reduced_dim_x, 1, 1}})
+		.push_constants(&pc_ray)
+		.bind(scene_desc_buffer);
 
 	// doing the reaytracing + temporal resampling update
 	instance->vkb.rg
 		->add_rt("BDPTResampled",
 				 {
-
 					 .shaders = {{"src/shaders/integrators/bdpt/bdpt_resample.rgen"},
 								 {"src/shaders/ray.rmiss"},
 								 {"src/shaders/ray_shadow.rmiss"},
 								 {"src/shaders/ray.rchit"},
 								 {"src/shaders/ray.rahit"}},
-					 .macros = std::move(resample_macros),
+					 .macros = resample_macros,
 					 .dims = {instance->width, instance->height},
 					 .accel = instance->vkb.tlas.accel})
-		//.zero(light_path_buffer)
-		//.zero(camera_path_buffer)
 		.push_constants(&pc_ray)
 		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
@@ -205,6 +204,14 @@ void BDPTResampled::render() {
 		.bind(mesh_lights_buffer)
 		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
+
+	// updating the reservoirs with the ray traced lighting information
+	instance->vkb.rg
+		->add_compute("Reservoir update", {.shader = Shader("src/shader/integrators/bdpt/update_light_samples.comp"),
+										   .macros = resample_macros,
+										   .dims = {reduced_dim_x, 1, 1}})
+		.push_constants(&pc_ray)
+		.bind(scene_desc_buffer);
 
 	instance->vkb.rg->run_and_submit(cmd);
 }

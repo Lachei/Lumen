@@ -8,8 +8,33 @@
 #extension GL_EXT_shader_atomic_float : require
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
+#include "../../commons.h"
+
+#ifndef SCENE_TEX_IDX
+#define SCENE_TEX_IDX 4
+#endif
+
+layout(binding = 1) uniform SceneUBOBuffer { SceneUBO ubo; };
+layout(binding = 2) buffer SceneDesc_ { SceneDesc scene_desc; };
+layout(binding = 3, scalar) readonly buffer Lights { Light lights[]; };
+layout(binding = SCENE_TEX_IDX) uniform sampler2D scene_textures[];
+layout(buffer_reference, scalar) readonly buffer InstanceInfo {
+    PrimMeshInfo d[];
+};
+layout(buffer_reference, scalar) readonly buffer Vertices { vec3 v[]; };
+layout(buffer_reference, scalar) readonly buffer Indices { uint i[]; };
+layout(buffer_reference, scalar) readonly buffer Normals { vec3 n[]; };
+layout(buffer_reference, scalar) readonly buffer TexCoords { vec2 t[]; };
+layout(buffer_reference, scalar) readonly buffer Materials { Material m[]; };
+
+Indices indices = Indices(scene_desc.index_addr);
+Vertices vertices = Vertices(scene_desc.vertex_addr);
+Normals normals = Normals(scene_desc.normal_addr);
+Materials materials = Materials(scene_desc.material_addr);
+InstanceInfo prim_infos = InstanceInfo(scene_desc.prim_info_addr);
+
 #include "../../utils.glsl"
-#include "../../commons.glsl"
+#include "../../lighting_commons.glsl"
 
 layout(push_constant) uniform _PushConstantRay { PCPath pc_ray; };
 const uint reduction_fac = 2;   // HAS to be consistent with reduction_fac in BDPTResampled.cpp
@@ -26,7 +51,6 @@ uvec4 seed = init_rng(uvec2(pixel_x, pixel_y), uvec2(pc_ray.size_x, pc_ray.size_
 
 layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
 layout(buffer_reference, scalar) buffer LightStartingPositions { LightStartingPosition d[];};
-layout(binding = 0) buffer SceneDesc_ { SceneDesc scene_desc; };
 
 // do not store or load data from these arrays with standard LightREsampleReservoir a = array.d[idx]
 // this will lead to erroneous loading due to alignment mismatches with the registers
@@ -56,6 +80,7 @@ void main(){
     int mult = int(rand(seed) * max_mult) + 1;
     int step_size = max(mult / steps, 1);
 
+#ifdef USE_SPATIAL_RESERVOIRS
     for(int i = 0; i < 100; ++i){
         const float dist = sqrt(rand(seed));
         const float angle = rand(seed) * PI2;
@@ -68,6 +93,7 @@ void main(){
         load_light_resampled_idx(light_temporal_reservoirs, neighbour, idx);
         reservoirs_combine(cur_reservoir, neighbour);
     }
+#endif
 
     // in the new approach we do not store the spatially resampled resservoirs
     // but simply go on to directly use it to spawn a new light spawn sample
@@ -77,7 +103,7 @@ void main(){
 
     // creating an initial light sample and resample it temporally ------------------------------
 
-    light_start_seed = seed;
+    uvec4 light_start_seed = seed;
     
     LightRecord light_record;
     vec3 wi, pos, n;
@@ -99,7 +125,7 @@ void main(){
 #endif
 
     // the resampling weight dependant on luminance values will be hadled after ray tracing)
-    float light_weight = resample_weight = cur_reservoir.w_sum / float(cur_reservoir.m);
+    float light_weight = cur_reservoir.w_sum / float(cur_reservoir.m);
     //light_weight = max(light_weight, light_default_weight);
     if(cur_reservoir.m == 0)
         light_weight = 1;
@@ -110,12 +136,6 @@ void main(){
 
     bool resampled = reservoir_add_light_sample(cur_reservoir, light_weight, light_start_seed, p_h);
     light_start_seed = cur_reservoir.seed;
-
-    //TODO remove after debugging
-    start_weights.w = cur_reservoir.w;
-    start_weights.w_sum = cur_reservoir.w_sum;
-    start_weights.p_h = cur_reservoir.p_h;
-    start_weights.m = cur_reservoir.m;
 
     //if(resampled)
     //    // if resampled exchange the p_h value stored in the w component of the reservoir
