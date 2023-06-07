@@ -1,0 +1,77 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+#include "../../utils.glsl"
+
+layout(push_constant) uniform _PushConstantRay { PCPath pc_ray; };
+const uint reduction_fac = 2;   // HAS to be consistent with reduction_fac in BDPTResampled.cpp
+uint width = (pc_ray.size_x + reduction_fac - 1) / reduction_fac;
+uint height = (pc_ray.size_y + reduction_fac - 1) / reduction_fac;
+
+uint pixel_count = width * height;
+uint pixel_x = gl_GlobalInvocationID.x / width;
+uint pixel_y = gl_GlobalInvocationID.x % width;
+uint pixel_idx = gl_GlobalInvocationID.x;
+uvec4 seed = init_rng(uvec2(pixel_x, pixel_y), uvec2(pc_ray.size_x, pc_ray.size_y), pc_ray.frame_num ^ pc_ray.time);
+
+#include "../bdpt_resampling_commons.glsl"
+
+layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
+layout(binding = 0) buffer SceneDesc_ { SceneDesc scene_desc; };
+
+layout(buffer_reference, scalar) buffer LightStartingPositions { LightStartingPosition d[];};
+layout(buffer_reference, scalar) buffer LightStartingPositionsWeights {float d[];};
+LightStartingPositions light_starting_positions = LightStartingPositions(scene_desc.light_spawn_position_addr);
+LightStartingPositionsWeights light_starting_positions_weights = LightStartingPositionsWeights(scene_desc.light_spawn_position_weights_addr);
+
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+#define pixel_xy2idx(x, y) (x) * pc_ray.size_y + (y)
+
+const uint max_samples = 20;
+void main(){
+    if(gl_GlobalInvocationID.x >= pixel_count)
+        return;
+
+    float luminance_avg = 0;
+    for(int j = 0; j < reduction_fac; ++j){
+        uint y = reduction_fac * pixle_y + j;
+        for(int i = 0; i < reduction_fac; ++i{
+            uint x = reduction_fac * pixel_x + i;
+            luminance_avg += light_starting_positions_weights.d[pixel_xy2idx(x, y)] / reduction_fac / reduction_facM;
+        }
+    }
+
+    // this luminance average should now be way more stable for weighting
+    uvec4 resampling_seed = light_starting_positions.d[gl_GlobalInvocationID.x].seed;
+    float pdf = light_starting_positions.d[gl_GlobalInvocationID.x].p_h;
+
+    // adding light point to temporal reservoir
+    LightResampleReservoir reservoir;
+    if(pc_ray.frame_num == 0){
+        reservoir.w = reservoir.w_sum = 0;
+        reservoir.m = 0;
+    }
+    else{
+        load_light_resampled(light_resampled_reservoirs, reservoir);
+    }
+
+    const float p_h = luminance_avg * pdf; // the luminance is the integral evaluated at the sample normalized by the sampling probability. So this unnormalizes the luminance to the target function
+    reservoir_add_light_sample(reservoir, luminance, resampling_seed, p_h);
+
+    // reducing the maximmum amount of samples stored temporally to avoid numerical problems
+    if(reservoir.m > max_samples){
+        uint prev_m = reservoir.m;
+        reservoir.m = max_samples;
+        reservoir.w_sum *= float(max_samples) / prev_m;
+    }
+
+    store_light_resampled(light_resampled_reservoirs, reservoir);
+}

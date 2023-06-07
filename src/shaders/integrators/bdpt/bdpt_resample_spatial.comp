@@ -9,29 +9,36 @@
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 
 #include "../../utils.glsl"
+#include "../../commons.glsl"
 
 layout(push_constant) uniform _PushConstantRay { PCPath pc_ray; };
-uint pixel_count = pc_ray.size_x * pc_ray.size_y;
-uint pixel_x = gl_GlobalInvocationID.x / pc_ray.size_y;
-uint pixel_y = gl_GlobalInvocationID.x % pc_ray.size_y;
+const uint reduction_fac = 2;   // HAS to be consistent with reduction_fac in BDPTResampled.cpp
+uint width = (pc_ray.size_x + reduction_fac - 1) / reduction_fac;
+uint height = (pc_ray.size_y + reduction_fac - 1) / reduction_fac;
+
+uint pixel_count = width * height;
+uint pixel_x = gl_GlobalInvocationID.x / width;
+uint pixel_y = gl_GlobalInvocationID.x % width;
 uint pixel_idx = gl_GlobalInvocationID.x;
-uvec4 seed = init_rng(uvec2(pixel_x, pixel_y), uvec2(pc_ray.size_x, pc_ray.size_y), pc_ray.frame_num);
+uvec4 seed = init_rng(uvec2(pixel_x, pixel_y), uvec2(pc_ray.size_x, pc_ray.size_y), pc_ray.frame_num ^ pc_ray.time);
 
 #include "../bdpt_resampling_commons.glsl"
 
 layout(buffer_reference, scalar) buffer LightResampledReservoirs { LightResampleReservoir d[]; };
+layout(buffer_reference, scalar) buffer LightStartingPositions { LightStartingPosition d[];};
 layout(binding = 0) buffer SceneDesc_ { SceneDesc scene_desc; };
 
 // do not store or load data from these arrays with standard LightREsampleReservoir a = array.d[idx]
 // this will lead to erroneous loading due to alignment mismatches with the registers
 // use load/store_lgiht_resampled[_idx] instead (see bdpt_resampling_commons.glsl for implementation)
 LightResampledReservoirs light_temporal_reservoirs = LightResampledReservoirs(scene_desc.global_light_reservoirs_addr);
-LightResampledReservoirs light_spatial_reservoirs = LightResampledReservoirs(scene_desc.global_light_spatial_addr);
+//LightResampledReservoirs light_spatial_reservoirs = LightResampledReservoirs(scene_desc.global_light_spatial_addr);
+LightStartingPositions light_starting_positions = LightStartingPositions(scene_desc.light_spawn_position_addr);
 
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 
 
-#define pixel_xy2idx(x, y) (x) * pc_ray.size_y + (y)
+#define pixel_xy2idx(x, y) (x) * width + (y)
 
 // In this shader multiple temporal reservoirs of neighbours are used to resample the best sample / approximate the true 
 // uminance even better
@@ -40,6 +47,7 @@ layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 const int max_mult = 400;
 const int steps = 3;
 void main(){
+    // spatial resampling accross the global light reservoirs ------------------------------
     if(pixel_idx >= pixel_count)
         return;
     LightResampleReservoir cur_reservoir;
@@ -48,24 +56,12 @@ void main(){
     int mult = int(rand(seed) * max_mult) + 1;
     int step_size = max(mult / steps, 1);
 
-    //for(int i = -mult; i <= mult; i += step_size){
-    //    for(int j = -mult; j <= mult; j += step_size){
-    //        if((i == 0 && j == 0) || pixel_x + i < 0 || pixel_x + i >= pc_ray.size_x ||
-    //            pixel_y + j < 0 || pixel_y + j >= pc_ray.size_y)
-    //            continue;
-    //        const uint idx = pixel_xy2idx(pixel_x + i, pixel_y + j);
-    //        LightResampleReservoir neighbour;
-    //        load_light_resampled_idx(light_temporal_reservoirs, neighbour, idx);
-    //        reservoirs_combine(cur_reservoir, neighbour);
-    //    }
-    //}
-
     for(int i = 0; i < 100; ++i){
         const float dist = sqrt(rand(seed));
         const float angle = rand(seed) * PI2;
         ivec2 off = ivec2((vec2(sin(angle), cos(angle)) * dist) * max_mult);
-        if(pixel_x + off.x < 0 || pixel_x + off.x >= pc_ray.size_x ||
-            pixel_y + off.y < 0 || pixel_y + off.y >= pc_ray.size_y)
+        if(pixel_x + off.x < 0 || pixel_x + off.x >= height ||
+            pixel_y + off.y < 0 || pixel_y + off.y >= width)
             continue;
         LightResampleReservoir neighbour;
         const uint idx = pixel_xy2idx(pixel_x + off.x, pixel_y + off.y);
@@ -73,5 +69,67 @@ void main(){
         reservoirs_combine(cur_reservoir, neighbour);
     }
 
-    store_light_resampled(light_spatial_reservoirs, cur_reservoir);
+    // in the new approach we do not store the spatially resampled resservoirs
+    // but simply go on to directly use it to spawn a new light spawn sample
+    // Like this one whole storing is getting abundant and the whole buffer is not needed
+
+    ///store_light_resampled(light_spatial_reservoirs, cur_reservoir);
+
+    // creating an initial light sample and resample it temporally ------------------------------
+
+    light_start_seed = seed;
+    
+    LightRecord light_record;
+    vec3 wi, pos, n;
+    float pdf_pos, pdf_dir = 1;
+    float cos_theta = 1;
+#if BDPT_MLT == 1
+    const vec4 rands_pos =
+        vec4(mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step),
+             mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+    const vec2 rands_dir =
+        vec2(mlt_rand(mlt_seed, large_step), mlt_rand(mlt_seed, large_step));
+    const vec3 Le = sample_light_Le(
+        pc_ray.num_lights, pc_ray.light_triangle_count, cos_theta, light_record,
+        pos, wi, n, pdf_pos, pdf_dir, rands_pos, 1.)
+#else
+    vec3 Le = sample_light_Le(seed, pc_ray.num_lights, pc_ray.light_triangle_count,
+                        cos_theta, light_record, pos, wi, n, pdf_pos, pdf_dir);
+    
+#endif
+
+    // the resampling weight dependant on luminance values will be hadled after ray tracing)
+    float light_weight = resample_weight = cur_reservoir.w_sum / float(cur_reservoir.m);
+    //light_weight = max(light_weight, light_default_weight);
+    if(cur_reservoir.m == 0)
+        light_weight = 1;
+
+    // as light_weight can be interpreted as the normalized sampling probability (p_h/p)
+    // here we unnormalize light_weight to get an approximate p_h
+    const float p_h = light_weight * pdf_pos; 
+
+    bool resampled = reservoir_add_light_sample(cur_reservoir, light_weight, light_start_seed, p_h);
+    light_start_seed = cur_reservoir.seed;
+
+    //TODO remove after debugging
+    start_weights.w = cur_reservoir.w;
+    start_weights.w_sum = cur_reservoir.w_sum;
+    start_weights.p_h = cur_reservoir.p_h;
+    start_weights.m = cur_reservoir.m;
+
+    //if(resampled)
+    //    // if resampled exchange the p_h value stored in the w component of the reservoir
+    //    // p_h can be retrieved from teh light_weight as light_weight was chosen such that it would be the average weight for resampling
+    //    reservoir.w = light_pdf * light_weight;
+
+    // calculate the resulting pdf/adjust the pdf value
+    // reasoning for the new pdf value is as follows
+    // light_pdf which is given here as input is the base probability to which the other probabilities
+    // have to be multiplied up to retrieve the final probability of choosing this sample.
+    // When doing resampling the probability of choosing this final sample is weight/total_weight
+    // To account for the amount of probes in the reservoir the pdf has to me multiplied by the count (Otherwise energy would be introduced)
+    pdf_pos = cur_reservoir.p_h * cur_reservoir.m / cur_reservoir.w_sum;
+
+    light_starting_positions.d[gl_GlobalInvocationID.x].seed = cur_reservoir.seed;
+    light_starting_positions.d[gl_GlobalInvocationID.x].p_h = pdf_pos;
 }

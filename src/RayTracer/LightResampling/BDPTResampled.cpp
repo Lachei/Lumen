@@ -10,10 +10,24 @@ struct Weights{float w, w_sum, p_h; uint m;};
 Buffer resample_weights;	// contains weights as well as weight sum p_hat and m (tuple of <float, float, float, uint>)
 #endif
 
+// changing the implementation to use less lighting reservoirs than pixels.
+// this means that the whole sampling spawn process will be updated:
+// 		1. Adding a new compute pipeline to create new spawn points.
+//		   This pipeline is added after the spatial resampling step and simply samples a new light, and combines that sample with the
+//		   spatial reservoirs. The resulting sample is stored in a separate buffer which holds only the seed and the probability for each sample
+// 		2. The raygen shader for the integration stage then takes these samples and calculates lighting with them
+//		3. The luminance for each sample is stored in an extra buffer (contains only 1 float per pixel)
+//		4. A compute shader averages the lighting contributions for each lighting reservoir
+//		   and uses the luminance to update the reservoirs accordingly
+
 template<typename T>
 inline std::ranges::iota_view<size_t> s_range(const T& v){return std::ranges::iota_view(size_t(0), v.size());}
 
 void BDPTResampled::init() {
+	constexpr uint32_t reduction_fac = 2;
+	light_spawn_position_width = (instance->width + reduction_fac - 1) / reduction_fac;
+	light_spawn_position_height = (instance->height + reduction_fac - 1) / reduction_fac;
+
 	Integrator::init();
 	light_path_buffer.create(
 		&instance->vkb.ctx,
@@ -46,6 +60,18 @@ void BDPTResampled::init() {
 			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, 
 			instance->width * instance->height * sizeof(LightResampleReservoir));
+
+	light_spawn_positions.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+		light_spawn_position_width * light_spawn_position_height * sizeof(LightStartingPosition));
+	
+	light_spawn_position_weights.create(
+		&instance->vkb.ctx,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+		instance->width * instance->height * sizeof(float));
 	
 #ifdef DEBUG_RESAMPLE
 	resample_positions.create(
@@ -75,6 +101,8 @@ void BDPTResampled::init() {
 	desc.color_storage_addr = color_storage_buffer.get_device_address();
 	desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
 	desc.global_light_spatial_addr = global_light_spatial_reservoir_buffer.get_device_address();
+	desc.light_spawn_position_addr = light_spawn_positions.get_device_address();
+	desc.light_spawn_position_weights_addr = light_spawn_position_weights.get_device_address();
 
 #ifdef DEBUG_RESAMPLE
 	desc.debug_resample_positions_addr = resample_positions.get_device_address();
@@ -94,6 +122,8 @@ void BDPTResampled::init() {
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, color_storage_addr, &color_storage_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, global_light_reservoirs_addr, &global_light_reservoir_buffer, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, global_light_spatial_addr, &global_light_spatial_reservoir_buffer, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, light_spawn_positionn_addr, &light_spawn_positions, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, light_spawn_positon_weights_addr, &light_spawn_position_weights, instance->vkb.rg);
 }
 
 void BDPTResampled::render() {

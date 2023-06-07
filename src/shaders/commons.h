@@ -617,6 +617,11 @@ struct LightResampleReservoir{
 	//vec3 L;
 };
 
+struct LightStartingPosition{
+	uvec4 seed;
+	float p_h;
+};
+
 struct LightState {
 	vec3 pos;
 	float triangle_pdf;
@@ -715,6 +720,8 @@ struct SceneDesc {
 	// BDPT Ressampled
 	uint64_t global_light_reservoirs_addr;
 	uint64_t global_light_spatial_addr;
+	uint64_t light_spawn_position_addr;
+	uint64_t light_spawn_position_weights_addr;
 	uint64_t debug_resample_positions_addr;
 	uint64_t debug_resample_weights_addr;
 };

@@ -21,6 +21,9 @@ class BDPTResampled : public Integrator {
 	Buffer color_storage_buffer;
 	Buffer global_light_reservoir_buffer;
 	Buffer global_light_spatial_reservoir_buffer;
+	uint32_t light_spawn_position_width, light_spawn_position_height;
+	Buffer light_spawn_positions;
+	Buffer light_spawn_position_weights;
 	SceneConfig& config;
 	nlohmann::json integrator_config;
 };
