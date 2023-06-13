@@ -153,7 +153,8 @@ void resample_light_spatial(){
 
 int bdpt_generate_light_subpath_resampled(const int max_depth, const vec3 cam_origin, out bool resampled) {
 //    light_start_seed = seed;
-    
+
+    vec3 Le; 
     LightRecord light_record;
     vec3 wi, pos, n;
     float pdf_pos, pdf_dir = 1;

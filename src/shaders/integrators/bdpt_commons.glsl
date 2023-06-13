@@ -561,7 +561,7 @@ vec3 bdpt_connect(int s, int t) {
 #else
         // creating the light starting position form the stored seed
         // light_start_seed is defined in bdpt_resample.rgen
-        uvec4 seed_copy = light_start_seed;<
+        uvec4 seed_copy = light_start_seed;
         const vec3 Le =
             sample_light_Li(seed_copy, cam_vtx(t - 1).pos, pc_ray.num_lights, wi,
                             wi_len, n, pos, pdf_pos_a, cos_y, record);

@@ -173,8 +173,10 @@ void BDPTResampled::render() {
 	const uint32_t spatial_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f));
 	const uint32_t reduced_dim_x = static_cast<uint32_t>(std::ceil(instance->width * instance->height / 1024.f / reduction_fac / reduction_fac));
 	std::vector<ShaderMacro> resample_macros;
-	if(use_spatial_reservoirs)
-		resample_macros.emplace_back("USE_SPATIAL_RESERVOIRS", "BDPT_RESAMPLE");
+	if(use_spatial_reservoirs){
+		resample_macros.emplace_back("USE_SPATIAL_RESERVOIRS");
+		resample_macros.emplace_back("BDPT_RESAMPLE");
+	}
 
 	// create the new sample
 	instance->vkb.rg
@@ -211,7 +213,14 @@ void BDPTResampled::render() {
 										   .macros = resample_macros,
 										   .dims = {reduced_dim_x, 1, 1}})
 		.push_constants(&pc_ray)
-		.bind(scene_desc_buffer);
+		.bind(std::initializer_list<ResourceBinding>{
+			output_tex,
+			scene_ubo_buffer,
+			scene_desc_buffer,
+		})
+		.bind(mesh_lights_buffer)
+		.bind_texture_array(scene_textures);
+	
 
 	instance->vkb.rg->run_and_submit(cmd);
 }
