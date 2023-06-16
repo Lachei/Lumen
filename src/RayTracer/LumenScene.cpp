@@ -124,143 +124,166 @@ void LumenScene::load_scene(const std::string& path) {
 		//	((VCMMLTConfig*)curr_config)->light_first = integrator["light_first"] == 1;
 		//}
 		// Load obj file
-		const std::string mesh_file = root + std::string(j["mesh_file"]);
-		tinyobj::ObjReaderConfig reader_config;
+		if(j.count("mesh_file")){
+			const std::string mesh_file = root + std::string(j["mesh_file"]);
+			tinyobj::ObjReaderConfig reader_config;
 
-		tinyobj::ObjReader reader;
-		if (!reader.ParseFromFile(mesh_file, reader_config)) {
-			if (!reader.Error().empty()) {
-				std::cerr << "TinyObjReader: " << reader.Error();
-			}
-			exit(1);
-		}
-
-		if (!reader.Warning().empty()) {
-			std::cout << "TinyObjReader: " << reader.Warning();
-		}
-
-		auto& attrib = reader.GetAttrib();
-		auto& shapes = reader.GetShapes();
-
-		prim_meshes.resize(shapes.size());
-		for (uint32_t s = 0; s < shapes.size(); s++) {
-			prim_meshes[s].first_idx = (uint32_t)indices.size();
-			prim_meshes[s].vtx_offset = (uint32_t)positions.size();
-			prim_meshes[s].name = shapes[s].name;
-			prim_meshes[s].idx_count = (uint32_t)shapes[s].mesh.indices.size();
-			prim_meshes[s].vtx_count = (uint32_t)shapes[s].mesh.num_face_vertices.size();
-			prim_meshes[s].prim_idx = s;
-			glm::vec3 min_vtx = glm::vec3(FLT_MAX);
-			glm::vec3 max_vtx = glm::vec3(-FLT_MAX);
-			uint32_t index_offset = 0;
-			uint32_t idx_val = 0;
-			for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-				for (uint32_t v = 0; v < 3; v++) {
-					tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
-					indices.push_back(idx_val++);
-					tinyobj::real_t vx = attrib.vertices[3 * uint32_t(idx.vertex_index) + 0];
-					tinyobj::real_t vy = attrib.vertices[3 * uint32_t(idx.vertex_index) + 1];
-					tinyobj::real_t vz = attrib.vertices[3 * uint32_t(idx.vertex_index) + 2];
-					positions.emplace_back(vx, vy, vz);
-					min_vtx = glm::min(positions[positions.size() - 1], min_vtx);
-					max_vtx = glm::max(positions[positions.size() - 1], max_vtx);
-					if (idx.normal_index >= 0) {
-						tinyobj::real_t nx = attrib.normals[3 * uint32_t(idx.normal_index) + 0];
-						tinyobj::real_t ny = attrib.normals[3 * uint32_t(idx.normal_index) + 1];
-						tinyobj::real_t nz = attrib.normals[3 * uint32_t(idx.normal_index) + 2];
-						normals.emplace_back(nx, ny, nz);
-					}
-					if (idx.texcoord_index >= 0) {
-						tinyobj::real_t tx = attrib.texcoords[2 * uint32_t(idx.texcoord_index) + 0];
-						tinyobj::real_t ty = attrib.texcoords[2 * uint32_t(idx.texcoord_index) + 1];
-						texcoords0.emplace_back(tx, ty);
-					}
+			tinyobj::ObjReader reader;
+			if (!reader.ParseFromFile(mesh_file, reader_config)) {
+				if (!reader.Error().empty()) {
+					std::cerr << "TinyObjReader: " << reader.Error();
 				}
-				index_offset += 3;
-			}
-			prim_meshes[s].min_pos = min_vtx;
-			prim_meshes[s].max_pos = max_vtx;
-			prim_meshes[s].world_matrix = glm::mat4(1);
-			// TODO: Implement world transforms
-		}
-		auto& bsdfs_arr = j["bsdfs"];
-		auto& lights_arr = j["lights"];
-		materials.resize(bsdfs_arr.size());
-		lights.resize(lights_arr.size());
-		int bsdf_idx = 0;
-		int light_idx = 0;
-		auto get_or_default_f = [](json& json, const std::string& prop, float val) -> float {
-			return json[prop].is_null() ? val : (float)json[prop];
-		};
-
-		auto get_or_default_v = [](json& json, const std::string& prop, const glm::vec3& val) -> glm::vec3 {
-			return json[prop].is_null() ? val : glm::vec3{json[prop][0], json[prop][1], json[prop][2]};
-		};
-
-		for (auto& bsdf : bsdfs_arr) {
-			materials[bsdf_idx].texture_id = -1;
-			auto& refs = bsdf["refs"];
-
-			if (!bsdf["texture"].is_null()) {
-				textures.push_back(root + (std::string)bsdf["texture"]);
-				materials[bsdf_idx].texture_id = (int)textures.size() - 1;
-			}
-			if (!bsdf["albedo"].is_null()) {
-				const auto& f = bsdf["albedo"];
-				float f0 = f[0];
-				float f1 = f[1];
-				float f2 = f[2];
-				materials[bsdf_idx].albedo = glm::vec3({f[0], f[1], f[2]});
-			} else {
-				materials[bsdf_idx].albedo = glm::vec3(1, 1, 1);
-			}
-			if (!bsdf["emissive_factor"].is_null()) {
-				const auto& f = bsdf["emissive_factor"];
-				materials[bsdf_idx].emissive_factor = glm::vec3({f[0], f[1], f[2]});
+				exit(1);
 			}
 
-			if (bsdf["type"] == "diffuse") {
-				materials[bsdf_idx].bsdf_type = BSDF_DIFFUSE;
-				materials[bsdf_idx].bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN;
-			} else if (bsdf["type"] == "mirror") {
-				materials[bsdf_idx].bsdf_type = BSDF_MIRROR;
-				materials[bsdf_idx].bsdf_props = BSDF_SPECULAR | BSDF_REFLECTIVE;
-			} else if (bsdf["type"] == "glass") {
-				materials[bsdf_idx].bsdf_type = BSDF_GLASS;
-				materials[bsdf_idx].bsdf_props = BSDF_SPECULAR | BSDF_TRANSMISSIVE;
-				materials[bsdf_idx].ior = bsdf["ior"];
-			} else if (bsdf["type"] == "glossy") {
-				materials[bsdf_idx].bsdf_type = BSDF_GLOSSY;
-				materials[bsdf_idx].bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN | BSDF_REFLECTIVE;
-				const auto& metalness = bsdf["metalness"];
-				materials[bsdf_idx].metalness = glm::vec3({metalness[0], metalness[1], metalness[2]});
-				materials[bsdf_idx].roughness = bsdf["roughness"];
-			} else if (bsdf["type"] == "disney") {
+			if (!reader.Warning().empty()) {
+				std::cout << "TinyObjReader: " << reader.Warning();
+			}
+
+			auto& attrib = reader.GetAttrib();
+			auto& shapes = reader.GetShapes();
+
+			prim_meshes.resize(shapes.size());
+			for (uint32_t s = 0; s < shapes.size(); s++) {
+				prim_meshes[s].first_idx = (uint32_t)indices.size();
+				prim_meshes[s].vtx_offset = (uint32_t)positions.size();
+				prim_meshes[s].name = shapes[s].name;
+				prim_meshes[s].idx_count = (uint32_t)shapes[s].mesh.indices.size();
+				prim_meshes[s].vtx_count = (uint32_t)shapes[s].mesh.num_face_vertices.size();
+				prim_meshes[s].prim_idx = s;
+				glm::vec3 min_vtx = glm::vec3(FLT_MAX);
+				glm::vec3 max_vtx = glm::vec3(-FLT_MAX);
+				uint32_t index_offset = 0;
+				uint32_t idx_val = 0;
+				for (uint32_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+					for (uint32_t v = 0; v < 3; v++) {
+						tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
+						indices.push_back(idx_val++);
+						tinyobj::real_t vx = attrib.vertices[3 * uint32_t(idx.vertex_index) + 0];
+						tinyobj::real_t vy = attrib.vertices[3 * uint32_t(idx.vertex_index) + 1];
+						tinyobj::real_t vz = attrib.vertices[3 * uint32_t(idx.vertex_index) + 2];
+						positions.emplace_back(vx, vy, vz);
+						min_vtx = glm::min(positions[positions.size() - 1], min_vtx);
+						max_vtx = glm::max(positions[positions.size() - 1], max_vtx);
+						if (idx.normal_index >= 0) {
+							tinyobj::real_t nx = attrib.normals[3 * uint32_t(idx.normal_index) + 0];
+							tinyobj::real_t ny = attrib.normals[3 * uint32_t(idx.normal_index) + 1];
+							tinyobj::real_t nz = attrib.normals[3 * uint32_t(idx.normal_index) + 2];
+							normals.emplace_back(nx, ny, nz);
+						}
+						if (idx.texcoord_index >= 0) {
+							tinyobj::real_t tx = attrib.texcoords[2 * uint32_t(idx.texcoord_index) + 0];
+							tinyobj::real_t ty = attrib.texcoords[2 * uint32_t(idx.texcoord_index) + 1];
+							texcoords0.emplace_back(tx, ty);
+						}
+					}
+					index_offset += 3;
+				}
+				prim_meshes[s].min_pos = min_vtx;
+				prim_meshes[s].max_pos = max_vtx;
+				prim_meshes[s].world_matrix = glm::mat4(1);
+				// TODO: Implement world transforms
+			}
+			
+			auto& bsdfs_arr = j["bsdfs"];
+			auto& lights_arr = j["lights"];
+			materials.resize(bsdfs_arr.size());
+			lights.resize(lights_arr.size());
+			int bsdf_idx = 0;
+			int light_idx = 0;
+			auto get_or_default_f = [](json& json, const std::string& prop, float val) -> float {
+				return json[prop].is_null() ? val : (float)json[prop];
+			};
+
+			auto get_or_default_v = [](json& json, const std::string& prop, const glm::vec3& val) -> glm::vec3 {
+				return json[prop].is_null() ? val : glm::vec3{json[prop][0], json[prop][1], json[prop][2]};
+			};
+
+			for (auto& bsdf : bsdfs_arr) {
+				materials[bsdf_idx].texture_id = -1;
+				auto& refs = bsdf["refs"];
+
+				if (!bsdf["texture"].is_null()) {
+					textures.push_back(root + (std::string)bsdf["texture"]);
+					materials[bsdf_idx].texture_id = (int)textures.size() - 1;
+				}
+				if (!bsdf["albedo"].is_null()) {
+					const auto& f = bsdf["albedo"];
+					float f0 = f[0];
+					float f1 = f[1];
+					float f2 = f[2];
+					materials[bsdf_idx].albedo = glm::vec3({f[0], f[1], f[2]});
+				} else {
+					materials[bsdf_idx].albedo = glm::vec3(1, 1, 1);
+				}
+				if (!bsdf["emissive_factor"].is_null()) {
+					const auto& f = bsdf["emissive_factor"];
+					materials[bsdf_idx].emissive_factor = glm::vec3({f[0], f[1], f[2]});
+				}
+
+				if (bsdf["type"] == "diffuse") {
+					materials[bsdf_idx].bsdf_type = BSDF_DIFFUSE;
+					materials[bsdf_idx].bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN;
+				} else if (bsdf["type"] == "mirror") {
+					materials[bsdf_idx].bsdf_type = BSDF_MIRROR;
+					materials[bsdf_idx].bsdf_props = BSDF_SPECULAR | BSDF_REFLECTIVE;
+				} else if (bsdf["type"] == "glass") {
+					materials[bsdf_idx].bsdf_type = BSDF_GLASS;
+					materials[bsdf_idx].bsdf_props = BSDF_SPECULAR | BSDF_TRANSMISSIVE;
+					materials[bsdf_idx].ior = bsdf["ior"];
+				} else if (bsdf["type"] == "glossy") {
+					materials[bsdf_idx].bsdf_type = BSDF_GLOSSY;
+					materials[bsdf_idx].bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN | BSDF_REFLECTIVE;
+					const auto& metalness = bsdf["metalness"];
+					materials[bsdf_idx].metalness = glm::vec3({metalness[0], metalness[1], metalness[2]});
+					materials[bsdf_idx].roughness = bsdf["roughness"];
+				} else if (bsdf["type"] == "disney") {
 #if ENABLE_DISNEY
-				Material& mat = materials[bsdf_idx];
-				mat.bsdf_type = BSDF_DISNEY;
-				mat.albedo = get_or_default_v(bsdf, "albedo", glm::vec3(1));
-				mat.metallic = get_or_default_f(bsdf, "metallic", 0);
-				mat.roughness = get_or_default_f(bsdf, "roughness", 0.5);
-				mat.specular_tint = get_or_default_f(bsdf, "specular_tint", 0);
-				mat.sheen_tint = get_or_default_f(bsdf, "sheen_tint", 0.5);
-				mat.clearcoat = get_or_default_f(bsdf, "clearcoat", 0);
-				mat.clearcoat_gloss = get_or_default_f(bsdf, "clearcoat_gloss", 1);
-				mat.subsurface = get_or_default_f(bsdf, "subsurface", 0);
-				mat.specular = get_or_default_f(bsdf, "specular", 0.5);
-				mat.sheen = get_or_default_f(bsdf, "sheen", 0);
-				mat.bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN | BSDF_REFLECTIVE;
+					Material& mat = materials[bsdf_idx];
+					mat.bsdf_type = BSDF_DISNEY;
+					mat.albedo = get_or_default_v(bsdf, "albedo", glm::vec3(1));
+					mat.metallic = get_or_default_f(bsdf, "metallic", 0);
+					mat.roughness = get_or_default_f(bsdf, "roughness", 0.5);
+					mat.specular_tint = get_or_default_f(bsdf, "specular_tint", 0);
+					mat.sheen_tint = get_or_default_f(bsdf, "sheen_tint", 0.5);
+					mat.clearcoat = get_or_default_f(bsdf, "clearcoat", 0);
+					mat.clearcoat_gloss = get_or_default_f(bsdf, "clearcoat_gloss", 1);
+					mat.subsurface = get_or_default_f(bsdf, "subsurface", 0);
+					mat.specular = get_or_default_f(bsdf, "specular", 0.5);
+					mat.sheen = get_or_default_f(bsdf, "sheen", 0);
+					mat.bsdf_props = BSDF_OPAQUE | BSDF_LAMBERTIAN | BSDF_REFLECTIVE;
 #endif
-			}
+				}
 
-			for (auto& ref : refs) {
-				for (int s = 0; s < shapes.size(); s++) {
-					if (ref == shapes[s].name) {
-						prim_meshes[s].material_idx = bsdf_idx;
+				for (auto& ref : refs) {
+					for (int s = 0; s < shapes.size(); s++) {
+						if (ref == shapes[s].name) {
+							prim_meshes[s].material_idx = bsdf_idx;
+						}
 					}
 				}
+				bsdf_idx++;
 			}
-			bsdf_idx++;
+			for (auto& light : lights_arr) {
+				const auto& pos = light["pos"];
+				const auto& dir = light["dir"];
+				const auto& L = light["L"];
+				lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
+				lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
+				lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
+				if (light["type"] == "spot") {
+					lights[light_idx].light_flags |= LIGHT_SPOT;
+					// Is finite
+					lights[light_idx].light_flags |= 1 << 4;
+					// Is delta
+					lights[light_idx].light_flags |= 1 << 5;
+				} else if (light["type"] == "directional") {
+					lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
+					// Is delta
+					lights[light_idx].light_flags |= 1 << 5;
+				}
+				light_idx++;
+			}
 		}
 
 		config.cam_settings.fov = j["camera"]["fov"];
@@ -269,26 +292,6 @@ void LumenScene::load_scene(const std::string& path) {
 		config.cam_settings.pos = {p[0], p[1], p[2]};
 		config.cam_settings.dir = {d[0], d[1], d[2]};
 		compute_scene_dimensions();
-		for (auto& light : lights_arr) {
-			const auto& pos = light["pos"];
-			const auto& dir = light["dir"];
-			const auto& L = light["L"];
-			lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
-			lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
-			lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
-			if (light["type"] == "spot") {
-				lights[light_idx].light_flags |= LIGHT_SPOT;
-				// Is finite
-				lights[light_idx].light_flags |= 1 << 4;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
-			} else if (light["type"] == "directional") {
-				lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
-			}
-			light_idx++;
-		}
 	} else if (ends_with(path, ".xml")) {
 		MitsubaParser mitsuba_parser;
 		mitsuba_parser.parse(path);

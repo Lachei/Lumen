@@ -1,0 +1,55 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_EXT_shader_atomic_int64 : enable
+#include "pcr_commons.h"
+
+layout(local_size_x = shader_atomic_size_x) in;
+
+layout(push_constant) uniform _PC { PC pc; };
+layout(buffer_reference, scalar) buffer ConstantInfos { ShaderAtomic c; };
+layout(buffer_reference, scalar) buffer Vertices { vec3 d[]; };
+layout(buffer_reference, scalar) buffer Colors   { vec3 d[]; };
+layout(buffer_reference, scalar) buffer Depths   { uint64_t d[]; }; // uint64_t to be able to hold depth and color values in a single buffer
+
+ConstantInfos constants = ConstantInfos(pc.info_addr);
+Vertices vertices = Vertices(constants.c.positions_addr);
+Colors colors = Colors(constants.c.colors_addr);
+Depths depths = Depths(constants.c.depth_image_addr);
+
+void main(){
+    if(gl_GlobalInvocationID.x >= constants.c.point_count)
+        return;
+    
+    uint x = gl_GlobalInvocationID.x % pc.size_x;
+    uint y = gl_GlobalInvocationID.x / pc.size_x;
+
+    // only loading the position, color only needed when depth is really written out
+    vec4 p = vec4(vertices.d[gl_GlobalInvocationID.x], 1);
+    p = pc.cam_matrix * p;
+    p /= p.w;
+    
+    ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
+    if(pixel_pos.x < 0 || pixel_pos.x >= pc.size_x ||
+        pixel_pos.y < 0 || pixel_pos.y >= pc.size_y)
+        return;
+
+    uint lin_pos = pixel_pos.x + pixel_pos.y * pc.size_x;
+
+    uint64_t depth = uint64_t((1 - p.z) * uint(-1));  // multiplication by uint(-1) maps 1 to max uint
+    uint64_t depth_color = depth << 32;
+    if(depth_color > depths.d[lin_pos]){
+        vec3 col = colors.d[gl_GlobalInvocationID.x];
+        depth_color |= uint(col.x * 255) << 24;
+        depth_color |= uint(col.y * 255) << 16;
+        depth_color |= uint(col.z * 255) << 8;
+
+        atomicMax(depths.d[lin_pos], depth_color);
+    }
+}

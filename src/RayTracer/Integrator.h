@@ -13,6 +13,7 @@
 #include "shaders/commons.h"
 #include "LumenScene.h"
 #include "LumenUtils.h"
+#include <chrono>
 class Integrator {
    public:
 	Integrator(LumenInstance* instance, LumenScene* lumen_scene) : instance(instance), lumen_scene(lumen_scene) {}
@@ -21,6 +22,7 @@ class Integrator {
 	virtual bool gui();
 	virtual bool update();
 	virtual void destroy();
+	void update_camera();
 	Texture2D output_tex;
 	std::unique_ptr<Camera> camera = nullptr;
 	bool updated = false;
@@ -29,15 +31,15 @@ class Integrator {
    protected:
 	virtual void update_uniform_buffers();
 	SceneUBO scene_ubo{};
-	Buffer vertex_buffer;
-	Buffer normal_buffer;
-	Buffer uv_buffer;
-	Buffer index_buffer;
-	Buffer materials_buffer;
-	Buffer prim_lookup_buffer;
-	Buffer scene_desc_buffer;
-	Buffer scene_ubo_buffer;
-	Buffer mesh_lights_buffer;
+	Buffer vertex_buffer{};
+	Buffer normal_buffer{};
+	Buffer uv_buffer{};
+	Buffer index_buffer{};
+	Buffer materials_buffer{};
+	Buffer prim_lookup_buffer{};
+	Buffer scene_desc_buffer{};
+	Buffer scene_ubo_buffer{};
+	Buffer mesh_lights_buffer{};
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
 	LumenInstance* instance;
@@ -46,6 +48,7 @@ class Integrator {
 	uint32_t total_light_triangle_cnt = 0;
 	float total_light_area = 0;
 	LumenScene* lumen_scene;
+	std::chrono::system_clock::time_point _last_frame_clock;
 
    private:
 	void create_blas();

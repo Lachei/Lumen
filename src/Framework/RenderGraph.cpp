@@ -260,7 +260,9 @@ static void build_shaders(RenderPass* pass, const std::vector<Shader*>& active_s
 				if (pass->rg->shader_cache.find(shader->name_with_macros) != pass->rg->shader_cache.end()) {
 					*shader = pass->rg->shader_cache[shader->name_with_macros];
 				} else {
+					try{
 					shader->compile(pass);
+					}catch(const std::exception& e) {std::cout << e.what() << std::endl;}
 					{
 						std::lock_guard<std::mutex> lock(pass->rg->shader_map_mutex);
 						pass->rg->shader_cache[shader->name_with_macros] = *shader;

@@ -268,6 +268,7 @@ static void parse_spirv(spirv_cross::CompilerGLSL& glsl, const spirv_cross::Shad
 					uint32_t id = insn[3];
 					if (access_chain_map.find(id) != access_chain_map.end()) {
 						const AccessChain& access_chain = access_chain_map[id];
+						// TODO: get_storage_class throws. This should be handled somehow
 						auto storage_class = glsl.get_storage_class(access_chain.base_ptr_id);
 						if (is_bound_buffer(storage_class)) {
 							auto binding = glsl.get_decoration(access_chain.base_ptr_id, spv::DecorationBinding);

@@ -368,6 +368,7 @@ void VulkanBase::create_logical_device() {
 	features12.bufferDeviceAddress = true;
 	features12.runtimeDescriptorArray = true;
 	features12.shaderSampledImageArrayNonUniformIndexing = true;
+	features12.shaderBufferInt64Atomics = true;
 	if (1) {
 		dynamic_rendering_feature.dynamicRendering = true;
 		syncronization2_features.synchronization2 = true;
@@ -435,6 +436,7 @@ void VulkanBase::create_swapchain() {
 	}(swapchain_support.formats);
 
 	VkPresentModeKHR present_mode = [this](const std::vector<VkPresentModeKHR>& present_modes) {
+		return VK_PRESENT_MODE_IMMEDIATE_KHR;
 		for (const auto& available_present_mode : present_modes) {
 			// For now we prefer Mailbox
 			if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
