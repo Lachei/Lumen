@@ -1,10 +1,14 @@
 #include "LumenPCH.h"
-#include "PCRShaderAtomic.h"
+#include "PCRHashMap.h"
 #include "LASFile.h"
 
 #define PRINT_FRAME_TIME
 
-void PCRShaderAtomic::init() {
+// to hash into the hashmap use hash_p()
+using HashMap = std::vector<HashMapEntry>;
+
+
+void PCRHashMap::init() {
 	// Loading the point cload data
 	if(!config.count("point_cloud"))
 		std::cout << "Missing point cloud file for point cloud rendering" << std::endl;
@@ -52,12 +56,12 @@ void PCRShaderAtomic::init() {
 	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, depth_image_addr, &image_depth_buffer, instance->vkb.rg);
 }
 
-void PCRShaderAtomic::render() {
+void PCRHashMap::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc.cam_matrix = camera->projection * camera->view;
 	instance->vkb.rg
 		->add_compute("Render Points",
-					 {.shader = Shader("src/shaders/pcr/pcr_shader_atomic.comp"),
+					 {.shader = Shader("src/shaders/pcr/pcr_hash_map.comp"),
 					  .dims = {(uint32_t)std::ceil(point_count / float(shader_atomic_size_x)), 1, 1}})
 		.zero(image_depth_buffer)
 		.push_constants(&pc);
@@ -89,12 +93,12 @@ void PCRShaderAtomic::render() {
 #endif
 }
 
-bool PCRShaderAtomic::update() {
+bool PCRHashMap::update() {
 	bool updated = Integrator::update();
 	return updated;
 }
 
-void PCRShaderAtomic::destroy() { 
+void PCRHashMap::destroy() { 
 	Integrator::destroy(); 
 	point_positions.destroy();
 	point_colors.destroy();

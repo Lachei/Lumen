@@ -12,6 +12,7 @@
 #include "LightResampling/BDPTResampled.h"
 #include "LightResampling/VCMResampled.h"
 #include "PointCloudRendering/PCRShaderAtomic.h"
+#include "PointCloudRendering/PCRHashMap.h"
 
 std::map<std::string_view, IntegratorRegistry::Entry> IntegratorRegistry::integrators{};
 
@@ -28,3 +29,4 @@ REGISTER(DDGI);
 REGISTER(BDPTResampled);
 REGISTER(VCMResampled);
 REGISTER(PCRShaderAtomic);
+REGISTER(PCRHashMap);

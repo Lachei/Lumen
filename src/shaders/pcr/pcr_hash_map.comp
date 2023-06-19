@@ -1,0 +1,95 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_EXT_shader_atomic_int64 : enable
+#include "pcr_commons.h"
+
+layout(local_size_x = hash_map_size_xy.x, local_size_y = hash_map_size_xy.y) in;
+
+layout(push_constant) uniform _PC { PC pc; };
+layout(buffer_reference, scalar) buffer ConstantInfos { ShaderAtomic c; };
+layout(buffer_reference, scalar) buffer Vertices { vec3 d[]; };
+layout(buffer_reference, scalar) buffer Colors   { uint d[]; };
+layout(buffer_reference, scalar) buffer Depths   { uint64_t d[]; }; // uint64_t to be able to hold depth and color values in a single buffer
+
+ConstantInfos constants = ConstantInfos(pc.info_addr);
+Vertices vertices = Vertices(constants.c.positions_addr);
+Colors colors = Colors(constants.c.colors_addr);
+Depths depths = Depths(constants.c.depth_image_addr);
+
+// taken from https://www.shadertoy.com/view/fdyXDR
+// returns the shortest distance to an axis intersection
+float calc_t(vec3 p, vec3 dir, float d){
+    float s = d;
+    vec3 t;
+    t.x = rd.x < 0. ? ((p.x*s - floor(p.x*s))/s)*delta.x
+                    : ((ceil(p.x*s) - p.x*s)/s)*delta.x; 
+                    
+    t.y = rd.y < 0. ? ((p.y*s - floor(p.y*s))/s)*delta.y
+                    : ((ceil(p.y*s) - p.y*s)/s)*delta.y; 
+    
+    t.z = rd.z < 0. ? ((p.z*s - floor(p.z*s))/s)*delta.z
+                    : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
+
+                    //+0.01 to get rid of a bunch of artifacts
+    return min(t.x,min(t.y,t.z))+0.001;
+}
+
+// returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
+vec3 intersection(vec3 ray_origin, vec3 ray_dir, vec3 minpos, vec3 maxpos){
+    vec3 inverse_dir = 1.0 / ray_dir;
+    vec3 tbot = inverse_dir * (minpos - ray_origin);
+    vec3 ttop = inverse_dir * (maxpos - ray_origin);
+    vec3 tmin = min(ttop, tbot);
+    vec3 tmax = max(ttop, tbot);
+    vec2 traverse = max(tmin.xx, tmin.yz);
+    float traverselow = max(traverse.x, traverse.y);
+    traverse = min(tmax.xx, tmax.yz);
+    float traversehi = min(traverse.x, traverse.y);
+
+    if(traversehi > max(traverselow, 0.0)
+        return vec3(1./0);
+
+    return ray_origin + (traverselow + .01) * ray_dir; 
+}
+
+// adopted from https://stackoverflow.com/a/26697650
+bool inside_aabb(vec3 p, vec3 b_min, vec3 b_max) {
+    vec3 s = step(b_min, p) - step(b_max, p);
+    return bool(s.x * s.y * s.z); 
+}
+
+
+// This shader implements the hash map approach for point cloud rendering
+
+void main(){
+    if(gl_GlobalInvocationID.x >= pc.size_x || gl_GlobalInvocationID.y >= pc.size_y)
+        return;
+    
+    // calculate starting position and direction
+    vec2 norm_dev_coords = (vec2(gl_GlobalInvocationID.xy) + vec2(.5)) / vec2(pc.size_x, pc.size_y) * 2 - 1;
+    vec4 origin = pc.cam_view_inv[3]; // 4th column is the origin transformation
+    vec4 dir = pc.cam_proj_inv * vec4(d.x, d.y, 1, 1);
+    dir = ubo.inv_view * vec4(normalize(dir.xyz), 0);
+    vec4 p = origin;
+
+    // calculating starting position (first intersection with the whole volume)
+    // only do if not already in the bounding box
+    if(!inside_aabb(p, constants.bounds_min, constants.bounds_max)
+        p.xyz = intersection(p, dir, b_min, b_max);
+    
+    // if no intersection found exit
+    if(isinf(p.x))
+        return;
+    
+    // debug output
+    uint h = hash_p(p.xyz, .2);
+    uint r = uint(sin(h * .01) * 255);
+    depth_color = (floatBitsToUint(length(p - origin)) << 32) | ;
+}

@@ -35,14 +35,18 @@ void main(){
     p = pc.cam_matrix * p;
     p /= p.w;
     
-    ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
-    if(pixel_pos.x < 0 || pixel_pos.x >= pc.size_x ||
-        pixel_pos.y < 0 || pixel_pos.y >= pc.size_y)
+    // no runtime difference between the two following tests
+    //if(p.x < -1 || p.x > 1 ||
+    //   p.y < -1 || p.y > 1)
+    vec2 clamped = clamp(p.xy, vec2(-1,-1), vec2(1, 1));
+    if(clamped != p.xy)
         return;
+
+    ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
 
     uint lin_pos = pixel_pos.x + pixel_pos.y * pc.size_x;
 
-    uint64_t depth = uint64_t((1 - p.z) * uint(-1));  // multiplication by uint(-1) maps 1 to max uint
+    uint64_t depth = floatBitsToUint(1 - p.z);  // multiplication by uint(-1) maps 1 to max uint
     uint64_t depth_color = depth << 32;
     if(depth_color > depths.d[lin_pos]){
         //vec3 col = colors.d[gl_GlobalInvocationID.x];
