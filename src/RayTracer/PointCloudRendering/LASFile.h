@@ -9,7 +9,7 @@ inline auto i_range(auto v){return std::ranges::iota_view(decltype(v)(0), v);}
 
 struct PointCloudData{
 	std::vector<vec3> positions;
-	std::vector<vec3> colors;
+	std::vector<uint32_t> colors;
 };
 
 #pragma pack(push, 1)
@@ -136,6 +136,8 @@ struct LASFile{
 
     ~LASFile(){ if(file_handle) fclose(file_handle);}
 
+    operator bool() const {return bool(file_handle);}
+
     PointCloudData load_point_cloud_data(){
         PointCloudData ret{};
         
@@ -168,7 +170,9 @@ struct LASFile{
                 //        ret.positions[i].y >= header.min_y && ret.positions[i].y <= header.max_y &&
                 //        ret.positions[i].z >= header.min_z && ret.positions[i].z <= header.max_z);
                 ret.positions[i] = {ret.positions[i].x, ret.positions[i].z, ret.positions[i].y};
-                ret.colors[i] = {float(data[i].color.red / 0xffffp0), float(data[i].color.green / 0xffffp0), float(data[i].color.blue / 0xffffp0)};
+                ret.colors[i] = ((data[i].color.red / 256) << 24) |
+                                ((data[i].color.green / 256) << 16) |
+                                ((data[i].color.blue / 256) << 8);//{float(data[i].color.red / 0xffffp0), float(data[i].color.green / 0xffffp0), float(data[i].color.blue / 0xffffp0)};
             }
         }
         case 3: break;

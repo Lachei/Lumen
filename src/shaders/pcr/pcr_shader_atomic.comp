@@ -15,7 +15,7 @@ layout(local_size_x = shader_atomic_size_x) in;
 layout(push_constant) uniform _PC { PC pc; };
 layout(buffer_reference, scalar) buffer ConstantInfos { ShaderAtomic c; };
 layout(buffer_reference, scalar) buffer Vertices { vec3 d[]; };
-layout(buffer_reference, scalar) buffer Colors   { vec3 d[]; };
+layout(buffer_reference, scalar) buffer Colors   { uint d[]; };
 layout(buffer_reference, scalar) buffer Depths   { uint64_t d[]; }; // uint64_t to be able to hold depth and color values in a single buffer
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
@@ -31,7 +31,7 @@ void main(){
     uint y = gl_GlobalInvocationID.x / pc.size_x;
 
     // only loading the position, color only needed when depth is really written out
-    vec4 p = vec4(vertices.d[gl_GlobalInvocationID.x], 1);
+    vec4 p = vec4(vertices.d[gl_GlobalInvocationID.x].xyz, 1);
     p = pc.cam_matrix * p;
     p /= p.w;
     
@@ -45,11 +45,11 @@ void main(){
     uint64_t depth = uint64_t((1 - p.z) * uint(-1));  // multiplication by uint(-1) maps 1 to max uint
     uint64_t depth_color = depth << 32;
     if(depth_color > depths.d[lin_pos]){
-        vec3 col = colors.d[gl_GlobalInvocationID.x];
-        depth_color |= uint(col.x * 255) << 24;
-        depth_color |= uint(col.y * 255) << 16;
-        depth_color |= uint(col.z * 255) << 8;
-
+        //vec3 col = colors.d[gl_GlobalInvocationID.x];
+        //depth_color |= uint(col.x * 255) << 24;
+        //depth_color |= uint(col.y * 255) << 16;
+        //depth_color |= uint(col.z * 255) << 8;
+        depth_color |= colors.d[gl_GlobalInvocationID.x];
         atomicMax(depths.d[lin_pos], depth_color);
     }
 }

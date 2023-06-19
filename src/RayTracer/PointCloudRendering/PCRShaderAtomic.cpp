@@ -2,6 +2,8 @@
 #include "PCRShaderAtomic.h"
 #include "LASFile.h"
 
+#define PRINT_FRAME_TIME
+
 void PCRShaderAtomic::init() {
 	// Loading the point cload data
 	if(!config.count("point_cloud"))
@@ -21,10 +23,10 @@ void PCRShaderAtomic::init() {
 
 	point_positions.create("Point positions", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  data.positions.size() * sizeof(vec3), data.positions.data(), true);
+							  data.positions.size() * sizeof(data.positions[0]), data.positions.data(), true);
 	point_colors.create("Point colors", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  data.colors.size() * sizeof(vec3), data.colors.data(), true); 
+							  data.colors.size() * sizeof(data.colors[0]), data.colors.data(), true); 
 	image_depth_buffer.create("Image depth buffer", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
 							  sizeof(uint64_t) * instance->width * instance->height);
@@ -67,7 +69,19 @@ void PCRShaderAtomic::render() {
 		.push_constants(&pc)
 		.bind(output_tex);
 
+#ifdef PRINT_FRAME_TIME
+	auto start = std::chrono::system_clock::now();
+	vk::check(vkDeviceWaitIdle(instance->vkb.ctx.device), "Device wait error");
+#endif
+
 	instance->vkb.rg->run_and_submit(cmd);
+
+#ifdef PRINT_FRAME_TIME
+	vk::check(vkDeviceWaitIdle(instance->vkb.ctx.device), "Device wait error");
+	auto end = std::chrono::system_clock::now();
+	auto dur = std::chrono::duration<double>(end - start).count();
+	std::cout << "Frametime: " << dur << " s, " << 1 / dur << " fps" << std::endl;
+#endif
 }
 
 bool PCRShaderAtomic::update() {
