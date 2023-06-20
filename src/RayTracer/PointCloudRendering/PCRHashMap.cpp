@@ -1,12 +1,9 @@
 #include "LumenPCH.h"
 #include "PCRHashMap.h"
 #include "LASFile.h"
+#include "BuildHashMap.h"
 
-#define PRINT_FRAME_TIME
-
-// to hash into the hashmap use hash_p()
-using HashMap = std::vector<HashMapEntry>;
-
+//#define PRINT_FRAME_TIME
 
 void PCRHashMap::init() {
 	// Loading the point cload data
@@ -14,6 +11,12 @@ void PCRHashMap::init() {
 		std::cout << "Missing point cloud file for point cloud rendering" << std::endl;
 	LASFile las_file(config["point_cloud"].get<std::string>());
 	auto data = las_file.load_point_cloud_data();
+	vec3 bounds_min= vec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
+	vec3 bounds_max= vec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
+	constexpr uint bins_per_side = 500;
+	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
+
+	auto map = create_hash_map(data.positions, delta_grid);
 	//auto new_dat = data;
 	//for(int i: i_range(3)){
 	//	new_dat.positions.insert(new_dat.positions.end(), data.positions.begin(), data.positions.end());
@@ -31,15 +34,13 @@ void PCRHashMap::init() {
 	point_colors.create("Point colors", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
 							  data.colors.size() * sizeof(data.colors[0]), data.colors.data(), true); 
-	image_depth_buffer.create("Image depth buffer", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  sizeof(uint64_t) * instance->width * instance->height);
 								  
-	ShaderAtomic constant_infos{
-		.point_count = uint(data.positions.size()),
+	HashMapConstants constant_infos{
+		.bounds_min = bounds_min,
+		.bounds_max = bounds_max,
+		.delta_grid = delta_grid,
 		.positions_addr = point_positions.get_device_address(),
 		.colors_addr = point_colors.get_device_address(),
-		.depth_image_addr = image_depth_buffer.get_device_address(),
 	};
 	constant_infos_buffer.create("Constant infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
@@ -53,23 +54,19 @@ void PCRHashMap::init() {
 	// For shader resource dependency inference, use this macro to register a buffer address to the rendergraph
 	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, positions_addr, &point_positions, instance->vkb.rg);
 	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, colors_addr, &point_colors, instance->vkb.rg);
-	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, depth_image_addr, &image_depth_buffer, instance->vkb.rg);
 }
 
 void PCRHashMap::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc.cam_matrix = camera->projection * camera->view;
+	pc.cam_view_inv = glm::inverse(camera->view);
+	pc.cam_proj_inv = glm::inverse(camera->projection);
+	uint32_t size_x = static_cast<uint32_t>(std::ceil(pc.size_x / float(hash_map_size_xy.x)));
+	uint32_t size_y = static_cast<uint32_t>(std::ceil(pc.size_y / float(hash_map_size_xy.y)));
 	instance->vkb.rg
 		->add_compute("Render Points",
 					 {.shader = Shader("src/shaders/pcr/pcr_hash_map.comp"),
-					  .dims = {(uint32_t)std::ceil(point_count / float(shader_atomic_size_x)), 1, 1}})
-		.zero(image_depth_buffer)
-		.push_constants(&pc);
-
-	instance->vkb.rg
-		->add_compute("Resolve Color",
-					 {.shader = Shader("src/shaders/pcr/pcr_resolve_color.comp"),
-					  .dims = {(uint32_t)std::ceil(pc.size_x * pc.size_y / float(shader_atomic_size_x)), 1, 1}})
+					  .dims = {size_x, size_y, 1}})
 		.push_constants(&pc)
 		.bind(output_tex);
 
@@ -102,6 +99,5 @@ void PCRHashMap::destroy() {
 	Integrator::destroy(); 
 	point_positions.destroy();
 	point_colors.destroy();
-	image_depth_buffer.destroy();
 	constant_infos_buffer.destroy();
 }

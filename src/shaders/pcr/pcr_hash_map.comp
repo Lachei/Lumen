@@ -10,23 +10,22 @@
 #extension GL_EXT_shader_atomic_int64 : enable
 #include "pcr_commons.h"
 
+layout(binding = 0, rgba32f) uniform image2D output_image;
 layout(local_size_x = hash_map_size_xy.x, local_size_y = hash_map_size_xy.y) in;
 
 layout(push_constant) uniform _PC { PC pc; };
-layout(buffer_reference, scalar) buffer ConstantInfos { ShaderAtomic c; };
-layout(buffer_reference, scalar) buffer Vertices { vec3 d[]; };
+layout(buffer_reference, scalar) buffer ConstantInfos { HashMapConstants c; };
 layout(buffer_reference, scalar) buffer Colors   { uint d[]; };
-layout(buffer_reference, scalar) buffer Depths   { uint64_t d[]; }; // uint64_t to be able to hold depth and color values in a single buffer
+layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
-Vertices vertices = Vertices(constants.c.positions_addr);
 Colors colors = Colors(constants.c.colors_addr);
-Depths depths = Depths(constants.c.depth_image_addr);
+HashMap hash_map = HashMap(constants.c.hash_map_addr);
 
 // taken from https://www.shadertoy.com/view/fdyXDR
 // returns the shortest distance to an axis intersection
-float calc_t(vec3 p, vec3 dir, float d){
-    float s = d;
+float calc_t(vec3 p, vec3 rd, vec3 delta){
+    float s = delta.x;
     vec3 t;
     t.x = rd.x < 0. ? ((p.x*s - floor(p.x*s))/s)*delta.x
                     : ((ceil(p.x*s) - p.x*s)/s)*delta.x; 
@@ -53,7 +52,7 @@ vec3 intersection(vec3 ray_origin, vec3 ray_dir, vec3 minpos, vec3 maxpos){
     traverse = min(tmax.xx, tmax.yz);
     float traversehi = min(traverse.x, traverse.y);
 
-    if(traversehi > max(traverselow, 0.0)
+    if(traversehi < max(traverselow, 0.0))
         return vec3(1./0);
 
     return ray_origin + (traverselow + .01) * ray_dir; 
@@ -75,21 +74,67 @@ void main(){
     // calculate starting position and direction
     vec2 norm_dev_coords = (vec2(gl_GlobalInvocationID.xy) + vec2(.5)) / vec2(pc.size_x, pc.size_y) * 2 - 1;
     vec4 origin = pc.cam_view_inv[3]; // 4th column is the origin transformation
-    vec4 dir = pc.cam_proj_inv * vec4(d.x, d.y, 1, 1);
-    dir = ubo.inv_view * vec4(normalize(dir.xyz), 0);
-    vec4 p = origin;
+    vec4 dir = pc.cam_proj_inv * vec4(norm_dev_coords.x, norm_dev_coords.y, 1, 1);
+    float dist = length(dir.xyz);
+    dir = pc.cam_view_inv * vec4(normalize(dir.xyz), 0);
+    vec4 p = origin + .1 * dist * dir;
 
     // calculating starting position (first intersection with the whole volume)
     // only do if not already in the bounding box
-    if(!inside_aabb(p, constants.bounds_min, constants.bounds_max)
-        p.xyz = intersection(p, dir, b_min, b_max);
+    vec3 b_min = constants.c.bounds_min;
+    vec3 b_max = constants.c.bounds_max;
+    if(!inside_aabb(p.xyz, b_min, b_max))
+        p.xyz = intersection(p.xyz, dir.xyz, b_min, b_max);
     
     // if no intersection found exit
-    if(isinf(p.x))
+    if(isinf(p.x)){
+        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(0));
         return;
-    
-    // debug output
-    uint h = hash_p(p.xyz, .2);
-    uint r = uint(sin(h * .01) * 255);
-    depth_color = (floatBitsToUint(length(p - origin)) << 32) | ;
+    }
+
+    if(false){ 
+        // debug output
+        uint h = hash_p(p.xyz, constants.c.delta_grid);
+        h = (h ^ (h >> 16)) & 0xffff;
+        vec4 col = vec4(sin(h * .1) * .5 + .5, sin(h * .3) * .5 + .5, sin(h * .5) * .5 + .5, 1);
+        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), col);
+        return;
+    }
+
+    vec3 delta = 1./max(abs(dir), 1e-3);
+
+    HashMapEntry cur_entry;
+    cur_entry.key.x = box_unused;
+    bool error = false;
+    for(int i = 0; i < 500; ++i){
+        // ---------------------------------------------------
+        // loading the bucket information
+        // ---------------------------------------------------
+        ivec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
+        // check if the bucket has to be reload
+        if(cur_bucket != cur_entry.key){
+            uint h = hash(cur_bucket);
+            uint index = hash_table_index(constants.c.hash_map_size);
+            ivec3 next_bucket = hash_table.d[index].key;
+            while(next_bucket != cur_bucket){
+                index = hash_table.d[index].next;
+                error |= index == uint(-1);
+                if(error) break;
+                next_bucket = hash_table.d[index].key;
+            }
+            if(error) break;
+            // loading the rest of the hash map info
+            cur_entry.occupancy = hash_table.d[index].occupancy;
+        }
+        
+        
+        // ---------------------------------------------------
+        // doing DDA
+        // ---------------------------------------------------
+        vec3 bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
+    }
+    if(error){
+        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), (1,0,0,1));
+        return;
+    }
 }

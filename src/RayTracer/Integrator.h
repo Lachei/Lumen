@@ -25,6 +25,7 @@ class Integrator {
 	void update_camera();
 	Texture2D output_tex;
 	std::unique_ptr<Camera> camera = nullptr;
+	float camera_speed = 1.f;
 	bool updated = false;
 	VkSampler texture_sampler;
 
