@@ -63,6 +63,7 @@ struct HashMapConstants{
     uint     hash_map_size;
     // output buffers
     uint64_t hash_map_addr;
+    uint64_t data_addr;
 };
     
 const uint occupancy_size = 2;
@@ -70,6 +71,11 @@ struct HashMapEntry{
     ivec3 key;      // needed to check if block is correct
     uint occupancy[cubed_box_per_hash][2]; // occupancy for 32 blocks
     uint next;      // index to the next bin
+    uint data_index;// index into the data array
+};
+
+struct DataEntry{
+    uint col;
 };
 
 #define BIT_CALCS(base_pos, p, d) vec3 rel = p - base_pos;\
@@ -89,7 +95,6 @@ INLINE bool check_bit(IN_MAP_ENTRY entry, vec3 base_pos, vec3 p, float d){
     BIT_CALCS(base_pos, p, d);
     return (entry.occupancy[lin_block][bank] & (1 << bit)) != 0;
 }
-#undef BIT_CALCS
 
 INLINE ivec3 bucket_pos(vec3 p, float d){
     d *= box_per_hash_box;

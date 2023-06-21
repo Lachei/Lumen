@@ -16,12 +16,14 @@ layout(local_size_x = hash_map_size_xy.x, local_size_y = hash_map_size_xy.y) in;
 layout(push_constant) uniform _PC { PC pc; };
 layout(buffer_reference, scalar) buffer ConstantInfos { HashMapConstants c; };
 layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
+layout(buffer_reference, scalar) buffer Data     { DataEntry d[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
 HashMap hash_map = HashMap(constants.c.hash_map_addr);
+Data data = Data(constants.c.data_addr);
 
 const bool show_hash_grid = false;
-const bool show_iteration_count = false;
+const bool show_iteration_count = true;
 
 // taken from https://www.shadertoy.com/view/fdyXDR
 // returns the shortest distance to an axis intersection
@@ -41,7 +43,7 @@ float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
                     : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
 
                     //+0.01 to get rid of a bunch of artifacts
-    return min(t.x,min(t.y,t.z))+0.001;
+    return min(t.x,min(t.y,t.z))+0.02;
 }
 
 // returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
@@ -120,7 +122,7 @@ void main(){
         // check if the bucket has to be reload
         if(cur_bucket != cur_entry.key){
             uint h = hash(cur_bucket);
-            uint index = hash_table_index(h, constants.c.hash_map_size);
+            uint index = (h, constants.c.hash_map_size);
             cur_entry.key = hash_map.d[index].key;
             cur_entry.next = hash_map.d[index].next;
             for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != uint(-1); ++j){
@@ -131,6 +133,7 @@ void main(){
             if(error) break;
             // loading the rest of the hash map info
             cur_entry.occupancy = hash_map.d[index].occupancy;
+            cur_entry.data_index = hash_map.d[index].data_index;
         }
 
         // ---------------------------------------------------
@@ -148,8 +151,11 @@ void main(){
                 // bit set, writeout depth and return, nothing more to do
                 if(show_iteration_count)
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
-                else
-                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), p);
+                else{
+                    uint col = data.d[cur_entry.data_index].col;
+                    vec4 color = vec4(((col >> 24) & 0xff) / 255., ((col >> 16) & 0xff) / 255., ((col >> 8) & 0xff) / 255., 1.);
+                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
+                }
                 return;
             }
         }

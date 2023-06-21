@@ -4,13 +4,15 @@
 #include <robin-hood/robin_hood.h>
 #include "../../shaders/pcr/pcr_commons.h"
 #include "util.h"
-#include <functional>
+#include <bit>
 
 // to hash into the hashmap use hash_p()
 using HashMap = std::vector<HashMapEntry>;
+using Data = std::vector<DataEntry>;
 struct HashMapInfos{
     size_t hash_map_size; // size of the standard hash map table, extra size of hash_map is due to linked lists
     HashMap hash_map;
+    Data data;
 };
 template<> struct std::hash<ivec3>{
     std::size_t operator()(const ivec3& v) const{
@@ -21,15 +23,19 @@ template<> struct std::hash<ivec3>{
     }
 };
 
-inline HashMapInfos create_hash_map(const std::vector<vec3>& points, float delta_grid){
+inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, float delta_grid){
+    struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
     uint32_t map_size = points.size() / 100;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
     robin_hood::unordered_set<uint> used_buckets;
-    robin_hood::unordered_set<ivec3> different_buckets;
+    robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
     HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .occupancy = {}, .next = uint(-1)});
-    for(const auto& p: points){
+    std::cout << "Starting hash map creation" << std::endl;
+    for(size_t point: s_range(points)){
+        const auto& p = points[point];
+        const auto& col = colors[point];
         ivec3 bucket = bucket_pos(p, delta_grid);
         vec3 bucket_b = bucket_base(bucket, delta_grid);
         uint h = hash(bucket);
@@ -55,8 +61,38 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, float delta
             map.emplace_back(HashMapEntry{bucket, {}, uint(-1)});
             map_entry = &map.back();
         }
+        bool is_contained = check_bit(*map_entry, bucket_b, p, delta_grid);
         set_bit(*map_entry, bucket_b, p, delta_grid);
+        {
+            BIT_CALCS(bucket_b, p, delta_grid);
+            uint bit_index = 0;
+            for(uint cur_block: i_range(lin_block))
+                for(uint cur_bank: i_range(2))
+                    bit_index += std::popcount(map_entry->occupancy[cur_block][cur_bank]);
+            for(uint cur_bank: i_range(bank))
+                bit_index += std::popcount(map_entry->occupancy[lin_block][cur_bank]);
+            bit_index += std::popcount(map_entry->occupancy[lin_block][bank] & ((1 << bit) - 1));
+            auto& cur_vec = index_to_colors[uint(map_entry - map.data())];
+            if(!is_contained)
+                cur_vec.insert(cur_vec.begin() + bit_index, ColorInfo{.color = col, .count = 1});
+            else{
+                cur_vec[bit_index].count++;
+                uint c = cur_vec[bit_index].count;
+                cur_vec[bit_index].color = 1.f / c * col + float(c - 1) / c * cur_vec[bit_index].color;
+            }
+        }
+
     }
+    // collecting the colors into the final vector and setting the offset pointer in the map
+    std::cout << "Starting conversion of color data" << std::endl;
+    Data datas;
+    for(const auto& [index, col_infos]: index_to_colors){
+        uint start_index = uint(datas.size());
+        for(const auto& col_info: col_infos)
+            datas.emplace_back(col_info.color);
+        map[index].data_index = start_index;
+    }
+    datas.shrink_to_fit();
     // compacting the whole hash map (trying to move linked list stuff from the back into the map
     robin_hood::unordered_map<uint, uint> indices_from_to;
     uint front = 0;
@@ -83,5 +119,5 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, float delta
     map.shrink_to_fit();
     auto end = std::chrono::system_clock::now();
     std::cout << "Hash map creation took " << std::chrono::duration<double>(end - start).count() << " s" << std::endl;
-    return {map_size, std::move(map)};
+    return {map_size, std::move(map), std::move(datas)};
 }
