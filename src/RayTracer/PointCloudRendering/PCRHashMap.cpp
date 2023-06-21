@@ -16,7 +16,7 @@ void PCRHashMap::init() {
 	constexpr uint bins_per_side = 500;
 	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
 
-	auto map = create_hash_map(data.positions, delta_grid);
+	auto [map_size, map] = create_hash_map(data.positions, delta_grid);
 	//auto new_dat = data;
 	//for(int i: i_range(3)){
 	//	new_dat.positions.insert(new_dat.positions.end(), data.positions.begin(), data.positions.end());
@@ -28,19 +28,16 @@ void PCRHashMap::init() {
 
 	Integrator::init();
 
-	point_positions.create("Point positions", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	hash_map_buffer.create("Point colors", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  data.positions.size() * sizeof(data.positions[0]), data.positions.data(), true);
-	point_colors.create("Point colors", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  data.colors.size() * sizeof(data.colors[0]), data.colors.data(), true); 
+							  map.size() * sizeof(map[0]), map.data(), true); 
 								  
 	HashMapConstants constant_infos{
 		.bounds_min = bounds_min,
 		.bounds_max = bounds_max,
 		.delta_grid = delta_grid,
-		.positions_addr = point_positions.get_device_address(),
-		.colors_addr = point_colors.get_device_address(),
+		.hash_map_size = uint(map_size),
+		.hash_map_addr = hash_map_buffer.get_device_address()
 	};
 	constant_infos_buffer.create("Constant infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
@@ -52,8 +49,8 @@ void PCRHashMap::init() {
 	assert(instance->vkb.rg->settings.shader_inference == true);
 
 	// For shader resource dependency inference, use this macro to register a buffer address to the rendergraph
-	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, positions_addr, &point_positions, instance->vkb.rg);
-	REGISTER_BUFFER_WITH_ADDRESS(ShaderAtomic, constant_infos, colors_addr, &point_colors, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(PC, pc, info_addr, &constant_infos_buffer, instance->vkb.rg);
+	REGISTER_BUFFER_WITH_ADDRESS(HashMapConstants, constant_infos, hash_map_addr, &hash_map_buffer, instance->vkb.rg);
 }
 
 void PCRHashMap::render() {
@@ -97,7 +94,6 @@ bool PCRHashMap::update() {
 
 void PCRHashMap::destroy() { 
 	Integrator::destroy(); 
-	point_positions.destroy();
-	point_colors.destroy();
 	constant_infos_buffer.destroy();
+	hash_map_buffer.destroy();
 }

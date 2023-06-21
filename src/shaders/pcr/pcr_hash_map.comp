@@ -15,17 +15,21 @@ layout(local_size_x = hash_map_size_xy.x, local_size_y = hash_map_size_xy.y) in;
 
 layout(push_constant) uniform _PC { PC pc; };
 layout(buffer_reference, scalar) buffer ConstantInfos { HashMapConstants c; };
-layout(buffer_reference, scalar) buffer Colors   { uint d[]; };
 layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
-Colors colors = Colors(constants.c.colors_addr);
 HashMap hash_map = HashMap(constants.c.hash_map_addr);
+
+const bool show_hash_grid = false;
+const bool show_iteration_count = false;
 
 // taken from https://www.shadertoy.com/view/fdyXDR
 // returns the shortest distance to an axis intersection
-float calc_t(vec3 p, vec3 rd, vec3 delta){
-    float s = delta.x;
+// p: position of the observer
+// rd: ray direction of the observer
+// delta: vec3 containing the inverses of the direction
+// s: current grid size
+float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
     vec3 t;
     t.x = rd.x < 0. ? ((p.x*s - floor(p.x*s))/s)*delta.x
                     : ((ceil(p.x*s) - p.x*s)/s)*delta.x; 
@@ -68,6 +72,7 @@ bool inside_aabb(vec3 p, vec3 b_min, vec3 b_max) {
 // This shader implements the hash map approach for point cloud rendering
 
 void main(){
+    const float hash_bucket_delta = constants.c.delta_grid * box_per_hash_box;
     if(gl_GlobalInvocationID.x >= pc.size_x || gl_GlobalInvocationID.y >= pc.size_y)
         return;
     
@@ -92,7 +97,7 @@ void main(){
         return;
     }
 
-    if(false){ 
+    if(show_hash_grid){ 
         // debug output
         uint h = hash_p(p.xyz, constants.c.delta_grid);
         h = (h ^ (h >> 16)) & 0xffff;
@@ -101,12 +106,13 @@ void main(){
         return;
     }
 
-    vec3 delta = 1./max(abs(dir), 1e-3);
+    vec3 delta = 1./max(abs(dir.xyz), 1e-1);
 
     HashMapEntry cur_entry;
     cur_entry.key.x = box_unused;
     bool error = false;
-    for(int i = 0; i < 500; ++i){
+    for(int i = 0; i < 500 && inside_aabb(p.xyz, b_min, b_max); ++i){
+        float cur_delta = constants.c.delta_grid;
         // ---------------------------------------------------
         // loading the bucket information
         // ---------------------------------------------------
@@ -114,27 +120,47 @@ void main(){
         // check if the bucket has to be reload
         if(cur_bucket != cur_entry.key){
             uint h = hash(cur_bucket);
-            uint index = hash_table_index(constants.c.hash_map_size);
-            ivec3 next_bucket = hash_table.d[index].key;
-            while(next_bucket != cur_bucket){
-                index = hash_table.d[index].next;
-                error |= index == uint(-1);
-                if(error) break;
-                next_bucket = hash_table.d[index].key;
+            uint index = hash_table_index(h, constants.c.hash_map_size);
+            cur_entry.key = hash_map.d[index].key;
+            cur_entry.next = hash_map.d[index].next;
+            for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != uint(-1); ++j){
+                index = cur_entry.next;
+                cur_entry.key = hash_map.d[cur_entry.next].key;
+                cur_entry.next = hash_map.d[cur_entry.next].next;
             }
             if(error) break;
             // loading the rest of the hash map info
-            cur_entry.occupancy = hash_table.d[index].occupancy;
+            cur_entry.occupancy = hash_map.d[index].occupancy;
+        }
+
+        // ---------------------------------------------------
+        // checking for the contents fo the current voxel
+        // ---------------------------------------------------
+
+        // if cur_entry still is not for the current grid pos we have an empty grid
+        // and can advance to the next hash bucket pos (so skipping to the next bucket pos)
+        if(cur_entry.key != cur_bucket){
+            cur_delta = hash_bucket_delta;
+        }
+        else{ // check for used bucket pos
+            vec3 bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
+            if(check_bit(cur_entry, bucket_base, p.xyz, constants.c.delta_grid)){
+                // bit set, writeout depth and return, nothing more to do
+                if(show_iteration_count)
+                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
+                else
+                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), p);
+                return;
+            }
         }
         
-        
         // ---------------------------------------------------
-        // doing DDA
+        // updating p via DDA
         // ---------------------------------------------------
-        vec3 bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
+        p.xyz += calc_t(p.xyz, dir.xyz, delta, 1 / cur_delta) * dir.xyz;
     }
     if(error){
-        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), (1,0,0,1));
-        return;
-    }
+        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(1,0,0,1));
+        return; }
+    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(0));
 }

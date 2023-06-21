@@ -8,6 +8,10 @@
 
 // to hash into the hashmap use hash_p()
 using HashMap = std::vector<HashMapEntry>;
+struct HashMapInfos{
+    size_t hash_map_size; // size of the standard hash map table, extra size of hash_map is due to linked lists
+    HashMap hash_map;
+};
 template<> struct std::hash<ivec3>{
     std::size_t operator()(const ivec3& v) const{
         std::size_t a = std::hash<int>{}(v.x);
@@ -17,7 +21,7 @@ template<> struct std::hash<ivec3>{
     }
 };
 
-inline HashMap create_hash_map(const std::vector<vec3>& points, float delta_grid){
+inline HashMapInfos create_hash_map(const std::vector<vec3>& points, float delta_grid){
     auto start = std::chrono::system_clock::now();
     uint32_t map_size = points.size() / 100;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
@@ -53,11 +57,25 @@ inline HashMap create_hash_map(const std::vector<vec3>& points, float delta_grid
         }
         set_bit(*map_entry, bucket_b, p, delta_grid);
     }
-    // checking the percentage of used buckets
-    //uint used_buckets{};
-    //for(size_t i: i_range(map_size))
-    //    if(map[i].key.x != box_unused)
-    //        ++used_buckets;
+    // compacting the whole hash map (trying to move linked list stuff from the back into the map
+    robin_hood::unordered_map<uint, uint> indices_from_to;
+    uint front = 0;
+    while(true){
+        // advance front pointer to next free bucket
+        while(map[front].key.x != box_unused && front < map_size)
+            ++front;
+        if(front >= map_size)
+            break;
+        map[front] = map.back();
+        map.pop_back();
+        indices_from_to[uint(map.size())] = front;
+        used_buckets.insert(front);
+    }
+    // exchanging the indices which are contained in indices_from_to form key to data value
+    for(auto& e: map)
+        if(indices_from_to.contains(e.next))
+            e.next = indices_from_to[e.next];
+
     std::cout << "Overall collisions: " << map.size() - map_size << std::endl;
     std::cout << "Overall map size: " << map.size() << "(original: " << map_size << ")" << std::endl;
     std::cout << "Longest linked list: " << longest_link << std::endl;
@@ -65,5 +83,5 @@ inline HashMap create_hash_map(const std::vector<vec3>& points, float delta_grid
     map.shrink_to_fit();
     auto end = std::chrono::system_clock::now();
     std::cout << "Hash map creation took " << std::chrono::duration<double>(end - start).count() << " s" << std::endl;
-    return map;
+    return {map_size, std::move(map)};
 }

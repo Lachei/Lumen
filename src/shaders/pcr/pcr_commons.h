@@ -62,7 +62,6 @@ struct HashMapConstants{
     float    delta_grid; // the delta distance for the underlying grid. The hash grid simply is 
     uint     hash_map_size;
     // output buffers
-    uint64_t colors_addr;
     uint64_t hash_map_addr;
 };
     
