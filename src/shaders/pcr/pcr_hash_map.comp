@@ -43,7 +43,7 @@ float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
                     : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
 
                     //+0.01 to get rid of a bunch of artifacts
-    return min(t.x,min(t.y,t.z))+0.02;
+    return min(t.x,min(t.y,t.z))+0.001;
 }
 
 // returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
@@ -147,7 +147,11 @@ void main(){
         }
         else{ // check for used bucket pos
             vec3 bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
+            vec3 bucket_center = bucket_base + vec3(constants.c.delta_grid / 2);
+            vec3 center_dir = bucket_center - origin.xyz;
+            float dist = length(bucket_center - (origin.xyz + dot(center_dir, dir.xyz) * dir.xyz));
             if(check_bit(cur_entry, bucket_base, p.xyz, constants.c.delta_grid)){
+                //&& dist < constants.c.delta_grid ){
                 // bit set, writeout depth and return, nothing more to do
                 if(show_iteration_count)
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);

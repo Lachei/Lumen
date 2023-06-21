@@ -38,8 +38,8 @@ void main(){
     // no runtime difference between the two following tests
     //if(p.x < -1 || p.x > 1 ||
     //   p.y < -1 || p.y > 1)
-    vec2 clamped = clamp(p.xy, vec2(-1,-1), vec2(1, 1));
-    if(clamped != p.xy)
+    vec3 clamped = clamp(p.xyz, vec3(-1), vec3(1));
+    if(clamped != p.xyz)
         return;
 
     ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
