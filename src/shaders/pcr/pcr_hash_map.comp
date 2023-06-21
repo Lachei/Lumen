@@ -122,7 +122,7 @@ void main(){
         // check if the bucket has to be reload
         if(cur_bucket != cur_entry.key){
             uint h = hash(cur_bucket);
-            uint index = (h, constants.c.hash_map_size);
+            uint index = hash_table_index(h, constants.c.hash_map_size);
             cur_entry.key = hash_map.d[index].key;
             cur_entry.next = hash_map.d[index].next;
             for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != uint(-1); ++j){
@@ -152,9 +152,10 @@ void main(){
                 if(show_iteration_count)
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
                 else{
-                    uint col = data.d[cur_entry.data_index].col;
-                    vec4 color = vec4(((col >> 24) & 0xff) / 255., ((col >> 16) & 0xff) / 255., ((col >> 8) & 0xff) / 255., 1.);
-                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), p);
+                    uint offset = calc_bit_offset(cur_entry, bucket_base, p.xyz, constants.c.delta_grid);
+                    uint col = data.d[cur_entry.data_index + offset].col;
+                    vec4 color = vec4(uint_col_to_vec(col), 1);
+                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
                 }
                 return;
             }

@@ -13,7 +13,7 @@ void PCRHashMap::init() {
 	auto data = las_file.load_point_cloud_data();
 	vec3 bounds_min= vec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
 	vec3 bounds_max= vec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
-	constexpr uint bins_per_side = 500;
+	constexpr uint bins_per_side = 4000;
 	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
 
 	auto [map_size, map, color_data] = create_hash_map(data.positions, data.colors, delta_grid);
@@ -28,7 +28,7 @@ void PCRHashMap::init() {
 
 	Integrator::init();
 
-	hash_map_buffer.create("Point colors", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	hash_map_buffer.create("Hash map", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
 							  map.size() * sizeof(map[0]), map.data(), true); 
 							  

@@ -18,11 +18,13 @@ using uint = uint32_t;
 #define INLINE inline
 #define INOUT_MAP_ENTRY HashMapEntry&
 #define IN_MAP_ENTRY const HashMapEntry&
+#define bit_count(x) std::popcount(x)
 #else
 #define ALIGN16
 #define INLINE
 #define INOUT_MAP_ENTRY inout HashMapEntry
 #define IN_MAP_ENTRY in HashMapEntry
+#define bit_count(x) bitCount(x)
 #endif
 
 // only contains the main camera info and the address to the
@@ -50,7 +52,7 @@ struct ShaderAtomic{
 
 
 const uvec2 hash_map_size_xy = uvec2(32, 32);
-const uint box_per_hash_box = 4; // has to be multiple of 4 (base compression block stores 4x4x4)
+const uint box_per_hash_box = 8; // has to be multiple of 4 (base compression block stores 4x4x4)
 const uint box_per_hash_box_cube = box_per_hash_box * box_per_hash_box * box_per_hash_box;
 const uint uints_per_hash = box_per_hash_box / 4;
 const uint cubed_box_per_hash = uints_per_hash * uints_per_hash * uints_per_hash;
@@ -131,6 +133,27 @@ INLINE uint hash_p(vec3 p, float d){
 
 INLINE uint hash_table_index(uint hash, uint table_size){
     return hash % table_size;
+}
+
+INLINE vec3 uint_col_to_vec(uint col){
+    return vec3(((col >> 24) & 0xff) / 255.f, ((col >> 16) & 0xff) / 255.f, ((col >> 8) & 0xff) / 255.f);
+}
+
+INLINE uint vec_col_to_uint(vec3 col){
+    return (uint(col.x * 255) << 24) | (uint(col.y * 255) << 16) | (uint(col.z * 255) << 8) | 255;
+}
+
+INLINE uint calc_bit_offset(INOUT_MAP_ENTRY map_entry, vec3 base_pos, vec3 p, float d){
+    BIT_CALCS(base_pos, p, d);
+    
+    uint bit_index = 0;
+    for(uint cur_block = 0; cur_block < lin_block; ++cur_block)
+        for(uint cur_bank = 0; cur_bank < 2; ++cur_bank)
+            bit_index += bit_count(map_entry.occupancy[cur_block][cur_bank]);
+    for(uint cur_bank = 0; cur_bank < bank; ++cur_bank)
+        bit_index += bit_count(map_entry.occupancy[lin_block][cur_bank]);
+    bit_index += bit_count(map_entry.occupancy[lin_block][bank] & ((1 << bit) - 1));
+    return bit_index;
 }
 
 #endif

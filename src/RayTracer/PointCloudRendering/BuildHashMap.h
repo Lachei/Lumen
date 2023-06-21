@@ -35,7 +35,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
         const auto& p = points[point];
-        const auto& col = colors[point];
+        auto col = colors[point];
         ivec3 bucket = bucket_pos(p, delta_grid);
         vec3 bucket_b = bucket_base(bucket, delta_grid);
         uint h = hash(bucket);
@@ -65,20 +65,17 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         set_bit(*map_entry, bucket_b, p, delta_grid);
         {
             BIT_CALCS(bucket_b, p, delta_grid);
-            uint bit_index = 0;
-            for(uint cur_block: i_range(lin_block))
-                for(uint cur_bank: i_range(2))
-                    bit_index += std::popcount(map_entry->occupancy[cur_block][cur_bank]);
-            for(uint cur_bank: i_range(bank))
-                bit_index += std::popcount(map_entry->occupancy[lin_block][cur_bank]);
-            bit_index += std::popcount(map_entry->occupancy[lin_block][bank] & ((1 << bit) - 1));
+            uint bit_index = calc_bit_offset(*map_entry, bucket_b, p, delta_grid);
             auto& cur_vec = index_to_colors[uint(map_entry - map.data())];
             if(!is_contained)
                 cur_vec.insert(cur_vec.begin() + bit_index, ColorInfo{.color = col, .count = 1});
             else{
                 cur_vec[bit_index].count++;
                 uint c = cur_vec[bit_index].count;
-                cur_vec[bit_index].color = 1.f / c * col + float(c - 1) / c * cur_vec[bit_index].color;
+                vec3 a = uint_col_to_vec(col);
+                vec3 b = uint_col_to_vec(cur_vec[bit_index].color);
+                a = 1.f / c * a + float(c - 1) / c * b;
+                cur_vec[bit_index].color = vec_col_to_uint(a);
             }
         }
 

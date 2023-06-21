@@ -252,10 +252,11 @@ void Integrator::create_tlas() {
 
 void Integrator::update_camera() {
 	double delta_t = std::chrono::duration<double>(std::chrono::system_clock::now() - _last_frame_clock).count();
+	_last_frame_clock = std::chrono::system_clock::now();
 
 	const glm::vec3 up{0,1,0};
 	glm::vec3 translation{};
-	float trans_speed = static_cast<float>(.0005 * std::min(delta_t, 500.));
+	float trans_speed = static_cast<float>(std::min(10 * delta_t, 500.));
 	glm::vec3 front;
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_SHIFT)) {
 		trans_speed *= 4;
