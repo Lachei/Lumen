@@ -31,7 +31,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
-    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .occupancy = {}, .next = uint(-1)});
+    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .occupancy = {}, .next = uint(-1), .data_index = uint(-1)});
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
         const auto& p = points[point];

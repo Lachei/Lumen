@@ -23,7 +23,7 @@ HashMap hash_map = HashMap(constants.c.hash_map_addr);
 Data data = Data(constants.c.data_addr);
 
 const bool show_hash_grid = false;
-const bool show_iteration_count = true;
+const bool show_iteration_count = false;
 
 // taken from https://www.shadertoy.com/view/fdyXDR
 // returns the shortest distance to an axis intersection
@@ -154,7 +154,7 @@ void main(){
                 else{
                     uint col = data.d[cur_entry.data_index].col;
                     vec4 color = vec4(((col >> 24) & 0xff) / 255., ((col >> 16) & 0xff) / 255., ((col >> 8) & 0xff) / 255., 1.);
-                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
+                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), p);
                 }
                 return;
             }
