@@ -16,10 +16,12 @@ layout(local_size_x = hash_map_size_xy.x, local_size_y = hash_map_size_xy.y) in;
 layout(push_constant) uniform _PC { PC pc; };
 layout(buffer_reference, scalar) buffer ConstantInfos { HashMapConstants c; };
 layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
+layout(buffer_reference, scalar) buffer Occupancies { OccupancyEntry d[]; };
 layout(buffer_reference, scalar) buffer Data     { DataEntry d[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
 HashMap hash_map = HashMap(constants.c.hash_map_addr);
+Occupancies occupancies = Occupancies(constants.c.occupancies_addr);
 Data data = Data(constants.c.data_addr);
 
 const bool show_hash_grid = false;
@@ -111,12 +113,13 @@ void main(){
     vec3 delta = 1./max(abs(dir.xyz), 1e-1);
 
     HashMapEntry cur_entry;
+    OccupancyEntry occupancy_entry; // only is loaded if successfully found hash map stuff
     cur_entry.key.x = box_unused;
     bool error = false;
     for(int i = 0; i < 500 && inside_aabb(p.xyz, b_min, b_max); ++i){
         float cur_delta = constants.c.delta_grid;
         // ---------------------------------------------------
-        // loading the bucket information
+        // loading the bucket information, only try, if not available continue
         // ---------------------------------------------------
         i16vec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
         // check if the bucket has to be reload

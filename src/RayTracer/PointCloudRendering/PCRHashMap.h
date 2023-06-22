@@ -15,6 +15,7 @@ class PCRHashMap: public Integrator {
     uint64_t		point_count;
 	Buffer 			constant_infos_buffer{};
 	Buffer			hash_map_buffer{};
+	Buffer			occupancies_buffer{};
 	Buffer 			data_buffer{};
 	PC 				pc{};
 	nlohmann::json 	config;

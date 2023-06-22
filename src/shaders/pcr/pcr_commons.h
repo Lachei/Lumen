@@ -66,6 +66,7 @@ struct HashMapConstants{
     uint     hash_map_size;
     // output buffers
     uint64_t hash_map_addr;
+    uint64_t occupancies_addr;
     uint64_t data_addr;
 };
     
@@ -73,7 +74,7 @@ const uint occupancy_size = 2;
 struct HashMapEntry{
     i16vec3 key;        // needed to check if block is correct
     uint16_t next;      // index offset to the next bin
-    uint data_index;    // index into the Hash Grid entry
+    uint occupancy_index;    // index into the Hash Grid entry
 };
 
 struct OccupancyEntry{

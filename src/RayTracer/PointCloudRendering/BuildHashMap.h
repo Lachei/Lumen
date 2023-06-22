@@ -8,10 +8,12 @@
 
 // to hash into the hashmap use hash_p()
 using HashMap = std::vector<HashMapEntry>;
+using OccupVec = std::vector<OccupancyEntry>;
 using Data = std::vector<DataEntry>;
 struct HashMapInfos{
     size_t hash_map_size; // size of the standard hash map table, extra size of hash_map is due to linked lists
     HashMap hash_map;
+    OccupVec occupancies;
     Data data;
 };
 template<> struct std::hash<ivec3>{
@@ -31,7 +33,8 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
-    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint(-1), .data_index = uint(-1), .occupancy = {}});
+    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint(-1), .occupancy_index = uint(-1));
+    OccupVec occupancies;
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
         const auto& p = points[point];
@@ -58,19 +61,27 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
                 index = (index + map_entry->next) % map_size;
                 map_entry = &map[index];
             }
-            while(map_entry[index].key.x != box_unused)
-                index = ++index % map_size;
-            
-            longest_link = std::max(longest_link, link_length);
 
-            map_entry->next = ((index + map_size) - (map_entry - map.data())) / map_size;
-            map_entry = &map[index];
+            // if the bucket does not yet exist, crate new bucket at next free position
+            // this includes the new occupancy position
+            if(map_entry->key != bucket){
+                while(map_entry[index].key.x != box_unused)
+                    index = ++index % map_size;
+
+                longest_link = std::max(longest_link, link_length);
+
+                map_entry->next = ((index + map_size) - (map_entry - map.data())) / map_size;
+                map_entry = &map[index];
+                map_entry->occupancy_index = occupancies.size();
+                occupancies.emplace_back();
+            }
         }
-        bool is_contained = check_bit(*map_entry, bucket_b, p, delta_grid);
-        set_bit(*map_entry, bucket_b, p, delta_grid);
+        auto& occupancy = occupancies[map_entry->occupancy_index];
+        bool is_contained = check_bit(occupancy, bucket_b, p, delta_grid);
+        set_bit(occupancy, bucket_b, p, delta_grid);
         {
             BIT_CALCS(bucket_b, p, delta_grid);
-            uint bit_index = calc_bit_offset(*map_entry, bucket_b, p, delta_grid);
+            uint bit_index = calc_bit_offset(occupancy, bucket_b, p, delta_grid);
             auto& cur_vec = index_to_colors[uint(map_entry - map.data())];
             if(!is_contained)
                 cur_vec.insert(cur_vec.begin() + bit_index, ColorInfo{.color = col, .count = 1});
@@ -92,7 +103,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         uint start_index = uint(datas.size());
         for(const auto& col_info: col_infos)
             datas.emplace_back(col_info.color);
-        map[index].data_index = start_index;
+        occupancies[map[index].occupancy_index].data_index = start_index;
     }
     datas.shrink_to_fit();
     // compacting the whole hash map (trying to move linked list stuff from the back into the map
@@ -121,5 +132,5 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     map.shrink_to_fit();
     auto end = std::chrono::system_clock::now();
     std::cout << "Hash map creation took " << std::chrono::duration<double>(end - start).count() << " s" << std::endl;
-    return {map_size, std::move(map), std::move(datas)};
+    return {map_size, std::move(map), std::move(occupancies), std::move(datas)};
 }
