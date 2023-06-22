@@ -26,17 +26,17 @@ template<> struct std::hash<ivec3>{
 inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, float delta_grid){
     struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
-    uint32_t map_size = points.size() / 100;//std::ceil(points.size() / float(box_per_hash_box_cube));
+    uint32_t map_size = points.size() / 10;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
-    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .occupancy = {}, .next = uint(-1), .data_index = uint(-1)});
+    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint(-1), .data_index = uint(-1), .occupancy = {}});
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
         const auto& p = points[point];
         auto col = colors[point];
-        ivec3 bucket = bucket_pos(p, delta_grid);
+        i16vec3 bucket = bucket_pos(p, delta_grid);
         vec3 bucket_b = bucket_base(bucket, delta_grid);
         uint h = hash(bucket);
         uint index = hash_table_index(h, map_size);
@@ -52,14 +52,19 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         // if not empty and the bucket inside the map is another, add to the linked list a new item
         if(!empty && !same_box){
             uint link_length{};
-            while(map_entry->key != bucket && map_entry->next != uint(-1)){
+            // now linear search for free bucket
+            while(map_entry->key != bucket && map_entry->next != int16_t(-1)){
                 ++link_length;
-                map_entry = &map[map_entry->next];
+                index = (index + map_entry->next) % map_size;
+                map_entry = &map[index];
             }
+            while(map_entry[index].key.x != box_unused)
+                index = ++index % map_size;
+            
             longest_link = std::max(longest_link, link_length);
-            map_entry->next = map.size();
-            map.emplace_back(HashMapEntry{bucket, {}, uint(-1)});
-            map_entry = &map.back();
+
+            map_entry->next = ((index + map_size) - (map_entry - map.data())) / map_size;
+            map_entry = &map[index];
         }
         bool is_contained = check_bit(*map_entry, bucket_b, p, delta_grid);
         set_bit(*map_entry, bucket_b, p, delta_grid);
@@ -91,23 +96,23 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     }
     datas.shrink_to_fit();
     // compacting the whole hash map (trying to move linked list stuff from the back into the map
-    robin_hood::unordered_map<uint, uint> indices_from_to;
-    uint front = 0;
-    while(true){
-        // advance front pointer to next free bucket
-        while(map[front].key.x != box_unused && front < map_size)
-            ++front;
-        if(front >= map_size)
-            break;
-        map[front] = map.back();
-        map.pop_back();
-        indices_from_to[uint(map.size())] = front;
-        used_buckets.insert(front);
-    }
-    // exchanging the indices which are contained in indices_from_to form key to data value
-    for(auto& e: map)
-        if(indices_from_to.contains(e.next))
-            e.next = indices_from_to[e.next];
+    //robin_hood::unordered_map<uint, uint> indices_from_to;
+    //uint front = 0;
+    //while(true){
+    //    // advance front pointer to next free bucket
+    //    while(map[front].key.x != box_unused && front < map_size)
+    //        ++front;
+    //    if(front >= map_size)
+    //        break;
+    //    map[front] = map.back();
+    //    map.pop_back();
+    //    indices_from_to[uint(map.size())] = front;
+    //    used_buckets.insert(front);
+    //}
+    //// exchanging the indices which are contained in indices_from_to form key to data value
+    //for(auto& e: map)
+    //    if(indices_from_to.contains(e.next))
+    //        e.next = indices_from_to[e.next];
 
     std::cout << "Overall collisions: " << map.size() - map_size << std::endl;
     std::cout << "Overall map size: " << map.size() << "(original: " << map_size << ")" << std::endl;

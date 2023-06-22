@@ -118,7 +118,7 @@ void main(){
         // ---------------------------------------------------
         // loading the bucket information
         // ---------------------------------------------------
-        ivec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
+        i16vec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
         // check if the bucket has to be reload
         if(cur_bucket != cur_entry.key){
             uint h = hash(cur_bucket);
@@ -150,8 +150,8 @@ void main(){
             vec3 bucket_center = bucket_base + vec3(constants.c.delta_grid / 2);
             vec3 center_dir = bucket_center - origin.xyz;
             float dist = length(bucket_center - (origin.xyz + dot(center_dir, dir.xyz) * dir.xyz));
-            if(check_bit(cur_entry, bucket_base, p.xyz, constants.c.delta_grid)
-                && dist < constants.c.delta_grid ){
+            if(check_bit(cur_entry, bucket_base, p.xyz, constants.c.delta_grid)){
+                //&& dist < constants.c.delta_grid ){
                 // bit set, writeout depth and return, nothing more to do
                 if(show_iteration_count)
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
