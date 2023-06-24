@@ -57,7 +57,7 @@ const uint box_per_hash_box = 8; // has to be multiple of 4 (base compression bl
 const uint box_per_hash_box_cube = box_per_hash_box * box_per_hash_box * box_per_hash_box;
 const uint uints_per_hash = box_per_hash_box / 4;
 const uint cubed_box_per_hash = uints_per_hash * uints_per_hash * uints_per_hash;
-const int box_unused = 0x7fff;
+const int16_t box_unused = int16_t(0x7fff);
 struct HashMapConstants{
     // settings/infos
     vec3     bounds_min; // minimum world bounding box (to know where to start)
@@ -87,7 +87,7 @@ struct DataEntry{
 };
 
 #define BIT_CALCS(base_pos, p, d) vec3 rel = p - base_pos;\
-    ivec3 index = i16vec3(floor(rel / d));\
+    ivec3 index = ivec3(floor(rel / d));\
     ivec3 fxfblock = index / 4;\
     ivec3 residual = index % 4;\
     int lin_block = fxfblock.x * int(uints_per_hash * uints_per_hash) + fxfblock.y * int(uints_per_hash) + fxfblock.z;\
@@ -123,8 +123,10 @@ INLINE uint hash_int(int i){
 }
 
 INLINE uint hash(i16vec3 b){
-    int p1 = 73856093, p2 = 19349669, p3 = 83492791;
-    //int h = ((p1 * b.x) ^ (b.y * p2) ^ (b.z * p3));
+    //b ^= i16vec3(0xaaaa);
+    //int p1 = 73856093, p2 = 19349669, p3 = 83492791;
+    int p1 = 73856093, p2 = 19998029, p3 = 83492791;
+    //int h = ((p1 * int(b.x)) ^ ((b.y) * p2) ^ ((b.z) * p3));
     uint h = (hash_int(b.x) << 2) ^ (hash_int(b.y) << 1) ^ hash_int(b.z);
 #ifdef __cplusplus
     return reinterpret_cast<uint&>(h);

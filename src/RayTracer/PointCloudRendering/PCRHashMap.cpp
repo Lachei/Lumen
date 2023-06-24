@@ -1,4 +1,4 @@
-##include "LumenPCH.h"
+#include "LumenPCH.h"
 #include "PCRHashMap.h"
 #include "LASFile.h"
 #include "BuildHashMap.h"

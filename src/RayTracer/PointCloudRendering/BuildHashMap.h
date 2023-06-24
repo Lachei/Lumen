@@ -28,12 +28,12 @@ template<> struct std::hash<ivec3>{
 inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, float delta_grid){
     struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
-    uint32_t map_size = points.size() / 10;//std::ceil(points.size() / float(box_per_hash_box_cube));
+    uint32_t map_size = points.size() * 2;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
-    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint(-1), .occupancy_index = uint(-1));
+    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint16_t(-1), .occupancy_index = uint(-1)});
     OccupVec occupancies;
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
@@ -51,12 +51,14 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         // if empty fill the bucket index
         if(empty){
             map_entry->key = bucket;
+            map_entry->occupancy_index = occupancies.size();
+            occupancies.emplace_back();
         }
         // if not empty and the bucket inside the map is another, add to the linked list a new item
         if(!empty && !same_box){
             uint link_length{};
             // now linear search for free bucket
-            while(map_entry->key != bucket && map_entry->next != int16_t(-1)){
+            while(map_entry->key != bucket && map_entry->next != uint16_t(-1)){
                 ++link_length;
                 index = (index + map_entry->next) % map_size;
                 map_entry = &map[index];
@@ -65,7 +67,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
             // if the bucket does not yet exist, crate new bucket at next free position
             // this includes the new occupancy position
             if(map_entry->key != bucket){
-                while(map_entry[index].key.x != box_unused)
+                while(map[index].key.x != box_unused)
                     index = ++index % map_size;
 
                 longest_link = std::max(longest_link, link_length);

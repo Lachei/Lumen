@@ -8,6 +8,7 @@
 #extension GL_EXT_shader_atomic_float : require
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_EXT_shader_atomic_int64 : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int16: enable
 #include "pcr_commons.h"
 
 layout(binding = 0, rgba32f) uniform image2D output_image;
@@ -126,17 +127,16 @@ void main(){
         if(cur_bucket != cur_entry.key){
             uint h = hash(cur_bucket);
             uint index = hash_table_index(h, constants.c.hash_map_size);
-            cur_entry.key = hash_map.d[index].key;
-            cur_entry.next = hash_map.d[index].next;
-            for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != uint(-1); ++j){
-                index = cur_entry.next;
-                cur_entry.key = hash_map.d[cur_entry.next].key;
-                cur_entry.next = hash_map.d[cur_entry.next].next;
+            cur_entry = hash_map.d[index];
+            for(int j = 0; j < 3 && cur_entry.key != cur_bucket && cur_entry.next != uint16_t(-1); ++j){
+                index += cur_entry.next;
+                index %= constants.c.hash_map_size;
+                cur_entry = hash_map.d[index];
             }
             if(error) break;
-            // loading the rest of the hash map info
-            cur_entry.occupancy = hash_map.d[index].occupancy;
-            cur_entry.data_index = hash_map.d[index].data_index;
+            // loading the rest of the hash map info only if the block was found succesfully
+            if(cur_bucket == cur_entry.key)
+                occupancy_entry = occupancies.d[cur_entry.occupancy_index];
         }
 
         // ---------------------------------------------------
@@ -153,14 +153,14 @@ void main(){
             vec3 bucket_center = bucket_base + vec3(constants.c.delta_grid / 2);
             vec3 center_dir = bucket_center - origin.xyz;
             float dist = length(bucket_center - (origin.xyz + dot(center_dir, dir.xyz) * dir.xyz));
-            if(check_bit(cur_entry, bucket_base, p.xyz, constants.c.delta_grid)){
+            if(check_bit(occupancy_entry, bucket_base, p.xyz, constants.c.delta_grid)){
                 //&& dist < constants.c.delta_grid ){
                 // bit set, writeout depth and return, nothing more to do
                 if(show_iteration_count)
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
                 else{
-                    uint offset = calc_bit_offset(cur_entry, bucket_base, p.xyz, constants.c.delta_grid);
-                    uint col = data.d[cur_entry.data_index + offset].col;
+                    uint offset = calc_bit_offset(occupancy_entry, bucket_base, p.xyz, constants.c.delta_grid);
+                    uint col = data.d[occupancy_entry.data_index + offset].col;
                     vec4 color = vec4(uint_col_to_vec(col), 1);
                     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
                 }
