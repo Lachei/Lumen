@@ -16,7 +16,7 @@ void PCRHashMap::init() {
 	constexpr uint bins_per_side = 4000;
 	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
 
-	auto [map_size, map, occupancies, color_data] = create_hash_map(data.positions, data.colors, delta_grid);
+	auto [map_size, map, empty_skip_maps, empty_skip_sizes, occupancies, color_data] = create_hash_map(data.positions, data.colors, 1, delta_grid);
 	//auto new_dat = data;
 	//for(int i: i_range(3)){
 	//	new_dat.positions.insert(new_dat.positions.end(), data.positions.begin(), data.positions.end());
@@ -40,14 +40,20 @@ void PCRHashMap::init() {
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
 							  color_data.size() * sizeof(color_data[0]), color_data.data(), true); 
 
+	empty_skip_buffer.create("Empty skip map", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+							  empty_skip_maps.front().size() * sizeof(empty_skip_maps.front()[0]), empty_skip_maps.front().data(), true); 
+
 	HashMapConstants constant_infos{
 		.bounds_min = bounds_min,
 		.bounds_max = bounds_max,
 		.delta_grid = delta_grid,
 		.hash_map_size = uint(map_size),
+		.empty_skip_size = empty_skip_sizes.front(),
 		.hash_map_addr = hash_map_buffer.get_device_address(),
 		.occupancies_addr = occupancies_buffer.get_device_address(),
-		.data_addr = data_buffer.get_device_address()
+		.data_addr = data_buffer.get_device_address(),
+		.empty_skip_addr = empty_skip_buffer.get_device_address()
 	};
 	constant_infos_buffer.create("Constant infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
@@ -110,4 +116,5 @@ void PCRHashMap::destroy() {
 	hash_map_buffer.destroy();
 	occupancies_buffer.destroy();
 	data_buffer.destroy();
+	empty_skip_buffer.destroy();
 }

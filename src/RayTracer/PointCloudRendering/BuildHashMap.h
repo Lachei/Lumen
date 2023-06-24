@@ -6,16 +6,23 @@
 #include "util.h"
 #include <bit>
 
+constexpr bool use_linked_list = true;      // uses linked list for the next elements in the hash map, else linear probing is used
+constexpr bool compact_linked_list = true;  // compacts the linked list after hash map creation (puts linked lists from the back of the hashmap in empty spots inside the hashmap
+
 // to hash into the hashmap use hash_p()
 using HashMap = std::vector<HashMapEntry>;
+using EmptySkipMap = std::vector<EmptySkipEntry>;
 using OccupVec = std::vector<OccupancyEntry>;
 using Data = std::vector<DataEntry>;
 struct HashMapInfos{
-    size_t hash_map_size; // size of the standard hash map table, extra size of hash_map is due to linked lists
-    HashMap hash_map;
-    OccupVec occupancies;
-    Data data;
+    size_t                    hash_map_size; // size of the standard hash map table, extra size of hash_map is due to linked lists
+    HashMap                   hash_map;
+    std::vector<EmptySkipMap> empty_skip_maps;
+    std::vector<uint>         empty_skip_sizes;
+    OccupVec                  occupancies;
+    Data                      data;
 };
+
 template<> struct std::hash<ivec3>{
     std::size_t operator()(const ivec3& v) const{
         std::size_t a = std::hash<int>{}(v.x);
@@ -25,15 +32,17 @@ template<> struct std::hash<ivec3>{
     }
 };
 
-inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, float delta_grid){
+inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, uint empty_skip_layer, float delta_grid){
     struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
-    uint32_t map_size = points.size() * 2;//std::ceil(points.size() / float(box_per_hash_box_cube));
+    uint32_t map_size = points.size() / 10;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
-    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = uint16_t(-1), .occupancy_index = uint(-1)});
+    HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1), .occupancy_index = uint(-1)});
+    std::vector<EmptySkipMap> empty_skip_maps(empty_skip_layer, EmptySkipMap(map_size / 8, EmptySkipEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1)}));
+    std::vector<uint> empty_skip_sizes{map_size / 8};
     OccupVec occupancies;
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
@@ -57,27 +66,75 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         // if not empty and the bucket inside the map is another, add to the linked list a new item
         if(!empty && !same_box){
             uint link_length{};
-            // now linear search for free bucket
-            while(map_entry->key != bucket && map_entry->next != uint16_t(-1)){
-                ++link_length;
-                index = (index + map_entry->next) % map_size;
-                map_entry = &map[index];
+            if constexpr (use_linked_list){
+                while(map_entry->key != bucket && map_entry->next != NEXT_T(-1)){
+                    ++link_length; 
+                    index = map_entry->next;
+                    map_entry = &map[index];
+                }
+
+                // check if new bucket is needed
+                if(map_entry->key != bucket){
+                    longest_link = std::max(longest_link, link_length);
+                    map_entry->next = NEXT_T(map.size());
+                    map.emplace_back(HashMapEntry{.key = bucket, .next = NEXT_T(-1), .occupancy_index = uint(occupancies.size())});
+                    map_entry = &map.back();
+                    occupancies.emplace_back();
+                }
             }
+            else{
+                // now linear search for free bucket
+                while(map_entry->key != bucket && map_entry->next != uint16_t(-1)){
+                    ++link_length;
+                    index = (index + map_entry->next) % map_size;
+                    map_entry = &map[index];
+                }
 
-            // if the bucket does not yet exist, crate new bucket at next free position
-            // this includes the new occupancy position
-            if(map_entry->key != bucket){
-                while(map[index].key.x != box_unused)
-                    index = ++index % map_size;
+                // if the bucket does not yet exist, crate new bucket at next free position
+                // this includes the new occupancy position
+                if(map_entry->key != bucket){
+                    while(map[index].key.x != box_unused)
+                        index = ++index % map_size;
 
-                longest_link = std::max(longest_link, link_length);
+                    longest_link = std::max(longest_link, link_length);
 
-                map_entry->next = ((index + map_size) - (map_entry - map.data())) / map_size;
-                map_entry = &map[index];
-                map_entry->occupancy_index = occupancies.size();
-                occupancies.emplace_back();
+                    map_entry->next = ((index + map_size) - (map_entry - map.data())) / map_size;
+                    map_entry = &map[index];
+                    map_entry->occupancy_index = occupancies.size();
+                    occupancies.emplace_back();
+                }
             }
         }
+        // adding the point to the empty skip maps
+        assert(empty_skip_maps.size() == empty_skip_sizes.size());
+        for(size_t i: s_range(empty_skip_maps)){
+            float cur_delta = delta_grid * (32 << i); // delta starts at 2 times the standard delta
+            i16vec3 b = bucket_pos(p, cur_delta);
+            vec3 b_base = bucket_base(p, cur_delta);
+            uint h_empty = hash(b);
+            uint empty_index = hash_table_index(h_empty, empty_skip_sizes[i]);
+
+            auto empty_entry = &empty_skip_maps[i][empty_index];
+            const bool empty_empty = empty_entry->key.x == box_unused;
+            const bool empty_same_box = !empty && empty_entry->key == bucket;
+            
+            if(empty_empty)
+                empty_entry->key = b;
+            if(!empty_empty && !empty_same_box){
+                // find correct box in linear array
+                while(empty_entry->key != b && empty_entry->next != NEXT_T(-1)){
+                    empty_index = empty_entry->next;
+                    empty_entry = &empty_skip_maps[i][empty_index];
+                }
+                
+                if(empty_entry->key != b){
+                    map_entry->next = NEXT_T(empty_skip_maps[i].size());
+                    empty_skip_maps[i].emplace_back(EmptySkipEntry{.key = b, .next = NEXT_T(-1)});
+                    empty_entry = &empty_skip_maps[i].back();
+                }
+            }
+        }
+        
         auto& occupancy = occupancies[map_entry->occupancy_index];
         bool is_contained = check_bit(occupancy, bucket_b, p, delta_grid);
         set_bit(occupancy, bucket_b, p, delta_grid);
@@ -109,23 +166,45 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     }
     datas.shrink_to_fit();
     // compacting the whole hash map (trying to move linked list stuff from the back into the map
-    //robin_hood::unordered_map<uint, uint> indices_from_to;
-    //uint front = 0;
-    //while(true){
-    //    // advance front pointer to next free bucket
-    //    while(map[front].key.x != box_unused && front < map_size)
-    //        ++front;
-    //    if(front >= map_size)
-    //        break;
-    //    map[front] = map.back();
-    //    map.pop_back();
-    //    indices_from_to[uint(map.size())] = front;
-    //    used_buckets.insert(front);
-    //}
-    //// exchanging the indices which are contained in indices_from_to form key to data value
-    //for(auto& e: map)
-    //    if(indices_from_to.contains(e.next))
-    //        e.next = indices_from_to[e.next];
+    if constexpr (use_linked_list && compact_linked_list){
+        robin_hood::unordered_map<uint, uint> indices_from_to;
+        uint front = 0;
+        while(true){
+            // advance front pointer to next free bucket
+            while(map[front].key.x != box_unused && front < map_size)
+                ++front;
+            if(front >= map_size || map.size() <= map_size)
+                break;
+            map[front] = map.back();
+            map.pop_back();
+            indices_from_to[uint(map.size())] = front;
+            used_buckets.insert(front);
+        }
+        // exchanging the indices which are contained in indices_from_to form key to data value
+        for(auto& e: map)
+            if(indices_from_to.contains(e.next))
+                e.next = indices_from_to[e.next];
+        
+        // compacting the zero skip maps
+        for(size_t i: s_range(empty_skip_maps)){
+            front = 0;
+            indices_from_to = {};
+            auto& cur_map = empty_skip_maps[i];
+            uint cur_map_size = empty_skip_sizes[i];
+            while(true){
+                while(cur_map[front].key.x != box_unused && front < cur_map_size)
+                    ++front;
+                if(front >= cur_map_size || cur_map.size() <= cur_map_size)
+                    break;
+                cur_map[front] = cur_map.back();
+                cur_map.pop_back();
+                indices_from_to[uint(cur_map.size())] = front;
+            }
+            for(auto& e: cur_map)
+                if(indices_from_to.contains(e.next))
+                    e.next = indices_from_to[e.next];
+        }
+    }
 
     std::cout << "Overall collisions: " << map.size() - map_size << std::endl;
     std::cout << "Overall map size: " << map.size() << "(original: " << map_size << ")" << std::endl;
@@ -134,5 +213,5 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     map.shrink_to_fit();
     auto end = std::chrono::system_clock::now();
     std::cout << "Hash map creation took " << std::chrono::duration<double>(end - start).count() << " s" << std::endl;
-    return {map_size, std::move(map), std::move(occupancies), std::move(datas)};
+    return {map_size, std::move(map), std::move(empty_skip_maps), std::move(empty_skip_sizes), std::move(occupancies), std::move(datas)};
 }

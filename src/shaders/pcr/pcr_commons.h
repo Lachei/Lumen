@@ -28,6 +28,8 @@ using uint = uint32_t;
 #define bit_count(x) bitCount(x)
 #endif
 
+#define NEXT_T uint
+
 // only contains the main camera info and the address to the
 // more specific info buffer containing specific settings and
 // output buffer addresses
@@ -64,17 +66,25 @@ struct HashMapConstants{
     vec3     bounds_max;
     float    delta_grid; // the delta distance for the underlying grid. The hash grid simply is 
     uint     hash_map_size;
+    uint     empty_skip_size;
     // output buffers
     uint64_t hash_map_addr;
     uint64_t occupancies_addr;
     uint64_t data_addr;
+    uint64_t empty_skip_addr;
 };
     
 const uint occupancy_size = 2;
 struct HashMapEntry{
     i16vec3 key;        // needed to check if block is correct
-    uint16_t next;      // index offset to the next bin
+    //uint16_t fill;      // index offset to the next bin
+    NEXT_T next;
     uint occupancy_index;    // index into the Hash Grid entry
+};
+
+struct EmptySkipEntry{
+    i16vec3 key;
+    NEXT_T next;
 };
 
 struct OccupancyEntry{

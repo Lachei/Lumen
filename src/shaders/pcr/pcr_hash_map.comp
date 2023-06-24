@@ -19,11 +19,13 @@ layout(buffer_reference, scalar) buffer ConstantInfos { HashMapConstants c; };
 layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
 layout(buffer_reference, scalar) buffer Occupancies { OccupancyEntry d[]; };
 layout(buffer_reference, scalar) buffer Data     { DataEntry d[]; };
+layout(buffer_reference, scalar) buffer EmptySkipMap{ EmptySkipEntry d[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
 HashMap hash_map = HashMap(constants.c.hash_map_addr);
 Occupancies occupancies = Occupancies(constants.c.occupancies_addr);
 Data data = Data(constants.c.data_addr);
+EmptySkipMap empty_skip_map = EmptySkipMap(constants.c.empty_skip_addr);
 
 const bool show_hash_grid = false;
 const bool show_iteration_count = false;
@@ -46,7 +48,7 @@ float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
                     : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
 
                     //+0.01 to get rid of a bunch of artifacts
-    return min(t.x,min(t.y,t.z))+0.001;
+    return min(t.x,min(t.y,t.z))+0.01;
 }
 
 // returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
@@ -119,59 +121,78 @@ void main(){
     bool error = false;
     for(int i = 0; i < 500 && inside_aabb(p.xyz, b_min, b_max); ++i){
         float cur_delta = constants.c.delta_grid;
+        
         // ---------------------------------------------------
-        // loading the bucket information, only try, if not available continue
+        // Checking for empty space to skip
         // ---------------------------------------------------
-        i16vec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
-        // check if the bucket has to be reload
-        if(cur_bucket != cur_entry.key){
-            uint h = hash(cur_bucket);
-            uint index = hash_table_index(h, constants.c.hash_map_size);
-            cur_entry = hash_map.d[index];
-            for(int j = 0; j < 3 && cur_entry.key != cur_bucket && cur_entry.next != uint16_t(-1); ++j){
-                index += cur_entry.next;
-                index %= constants.c.hash_map_size;
+        const float map_mult = 32;
+        i16vec3 empty_space_bucket = bucket_pos(p.xyz, constants.c.delta_grid * map_mult);
+        uint empty_h = hash(empty_space_bucket);
+        uint empty_index = hash_table_index(empty_h, constants.c.empty_skip_size);
+        EmptySkipEntry empty_entry = empty_skip_map.d[empty_index];
+        for(int j = 0; j < 10 && empty_entry.key != empty_space_bucket && empty_entry.next != NEXT_T(-1); ++j)
+            empty_entry = empty_skip_map.d[empty_entry.next];
+
+        if(empty_entry.key != empty_space_bucket)
+            cur_delta = hash_bucket_delta * map_mult;
+        else{ // space is not empty -> check further
+            // ---------------------------------------------------
+            // loading the bucket information, only try, if not available continue
+            // ---------------------------------------------------
+            i16vec3 cur_bucket = bucket_pos(p.xyz, constants.c.delta_grid);
+            // check if the bucket has to be reload
+            if(cur_bucket != cur_entry.key){
+                uint h = hash(cur_bucket);
+                uint index = hash_table_index(h, constants.c.hash_map_size);
                 cur_entry = hash_map.d[index];
-            }
-            if(error) break;
-            // loading the rest of the hash map info only if the block was found succesfully
-            if(cur_bucket == cur_entry.key)
-                occupancy_entry = occupancies.d[cur_entry.occupancy_index];
-        }
-
-        // ---------------------------------------------------
-        // checking for the contents fo the current voxel
-        // ---------------------------------------------------
-
-        // if cur_entry still is not for the current grid pos we have an empty grid
-        // and can advance to the next hash bucket pos (so skipping to the next bucket pos)
-        if(cur_entry.key != cur_bucket){
-            cur_delta = hash_bucket_delta;
-        }
-        else{ // check for used bucket pos
-            vec3 bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
-            vec3 bucket_center = bucket_base + vec3(constants.c.delta_grid / 2);
-            vec3 center_dir = bucket_center - origin.xyz;
-            float dist = length(bucket_center - (origin.xyz + dot(center_dir, dir.xyz) * dir.xyz));
-            if(check_bit(occupancy_entry, bucket_base, p.xyz, constants.c.delta_grid)){
-                //&& dist < constants.c.delta_grid ){
-                // bit set, writeout depth and return, nothing more to do
-                if(show_iteration_count)
-                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
-                else{
-                    uint offset = calc_bit_offset(occupancy_entry, bucket_base, p.xyz, constants.c.delta_grid);
-                    uint col = data.d[occupancy_entry.data_index + offset].col;
-                    vec4 color = vec4(uint_col_to_vec(col), 1);
-                    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
+                for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != NEXT_T(-1); ++j){
+                    index = cur_entry.next;
+                    //index %= constants.c.hash_map_size;
+                    cur_entry = hash_map.d[index];
                 }
-                return;
+                if(error) break;
+                // loading the rest of the hash map info only if the block was found succesfully
+                if(cur_bucket == cur_entry.key)
+                    occupancy_entry = occupancies.d[cur_entry.occupancy_index];
+            }
+
+            // ---------------------------------------------------
+            // checking for the contents fo the current voxel
+            // ---------------------------------------------------
+
+            // if cur_entry still is not for the current grid pos we have an empty grid
+            // and can advance to the next hash bucket pos (so skipping to the next bucket pos)
+            if(cur_entry.key != cur_bucket){
+                cur_delta = hash_bucket_delta;
+            }
+            else{ // check for used bucket pos
+                float small_delta = constants.c.delta_grid / box_per_hash_box;
+                vec3 hash_bucket_base = bucket_base(cur_bucket, constants.c.delta_grid);
+                vec3 small_base = bucket_base(bucket_pos(p.xyz, small_delta), small_delta);
+                vec3 bucket_center = small_base + vec3(small_delta * .5);
+                vec3 center_dir = bucket_center - origin.xyz;
+                float dist = length(bucket_center - (origin.xyz + dot(center_dir, dir.xyz) * dir.xyz));
+                if(check_bit(occupancy_entry, hash_bucket_base, p.xyz, constants.c.delta_grid)
+                    //&& dist < 2 * small_delta 
+                    ){
+                    // bit set, writeout depth and return, nothing more to do
+                    if(show_iteration_count)
+                        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(.01) * i);
+                    else{
+                        uint offset = calc_bit_offset(occupancy_entry, hash_bucket_base, p.xyz, constants.c.delta_grid);
+                        uint col = data.d[occupancy_entry.data_index + offset].col;
+                        vec4 color = vec4(uint_col_to_vec(col), 1);
+                        imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
+                    }
+                    return;
+                }
             }
         }
         
         // ---------------------------------------------------
         // updating p via DDA
         // ---------------------------------------------------
-        p.xyz += calc_t(p.xyz, dir.xyz, delta, 1 / cur_delta) * dir.xyz;
+        p.xyz += calc_t(p.xyz, dir.xyz, delta, 1. / cur_delta) * dir.xyz;
     }
     if(error){
         imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(1,0,0,1));

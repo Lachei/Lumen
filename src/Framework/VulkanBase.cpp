@@ -336,6 +336,7 @@ void VulkanBase::create_logical_device() {
 	}
 	// TODO: Pass these externally
 	VkPhysicalDeviceFeatures2 device_features2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+	VkPhysicalDeviceVulkan11Features features11{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
 	VkPhysicalDeviceVulkan12Features features12 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_fts{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
@@ -382,14 +383,19 @@ void VulkanBase::create_logical_device() {
 		features13.pNext = &rt_fts;
 	}
 
+	features11.storageBuffer16BitAccess = true;
+	features11.uniformAndStorageBuffer16BitAccess = true;
+	features11.pNext = &features12;
+
 	device_features2.features.samplerAnisotropy = true;
 	device_features2.features.shaderInt64 = true;
+	device_features2.features.shaderInt16 = true;
 	//
 	device_features2.features.fragmentStoresAndAtomics = true;
 	device_features2.features.vertexPipelineStoresAndAtomics = true;
 	//
 
-	device_features2.pNext = &features12;
+	device_features2.pNext = &features11;
 
 	VkDeviceCreateInfo logical_device_CI{};
 	logical_device_CI.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
