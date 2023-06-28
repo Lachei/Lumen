@@ -48,7 +48,7 @@ float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
                     : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
 
                     //+0.01 to get rid of a bunch of artifacts
-    return min(t.x,min(t.y,t.z))+0.01;
+    return min(t.x,min(t.y,t.z))+0.001;
 }
 
 // returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
@@ -113,7 +113,7 @@ void main(){
         return;
     }
 
-    vec3 delta = 1./max(abs(dir.xyz), 1e-1);
+    vec3 delta = 1./max(abs(dir.xyz), 1e-3);
 
     HashMapEntry cur_entry;
     OccupancyEntry occupancy_entry; // only is loaded if successfully found hash map stuff
