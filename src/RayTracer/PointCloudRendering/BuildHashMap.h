@@ -32,9 +32,11 @@ template<> struct std::hash<ivec3>{
     }
 };
 
-inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, uint empty_skip_layer, float delta_grid){
+inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, vec3 bounds_min, vec3 bounds_max, uint empty_skip_layer, float delta_grid){
     struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
+    vec3 diff = bounds_max - bounds_min;
+    float highest_diff = std::max(std::max(diff.x, diff.y), diff.z);
     uint32_t map_size = points.size() / 10;//std::ceil(points.size() / float(box_per_hash_box_cube));
     uint32_t longest_link{};
     robin_hood::unordered_set<uint> used_buckets;
@@ -42,7 +44,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     // trying to create the hash map, if not increasing the map size and retry
     HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1), .occupancy_index = uint(-1)});
     std::vector<EmptySkipMap> empty_skip_maps(empty_skip_layer, EmptySkipMap(map_size / 8, EmptySkipEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1)}));
-    std::vector<uint> empty_skip_sizes{map_size / 8};
+    std::vector<uint> empty_skip_sizes(empty_skip_layer, map_size / 8);
     OccupVec occupancies;
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
@@ -108,7 +110,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         // adding the point to the empty skip maps
         assert(empty_skip_maps.size() == empty_skip_sizes.size());
         for(size_t i: s_range(empty_skip_maps)){
-            float cur_delta = delta_grid * (32 << i); // delta starts at 2 times the standard delta
+            float cur_delta = delta_grid * (1 << i); // delta starts at 2 times the standard delta
             i16vec3 b = bucket_pos(p, cur_delta);
             vec3 b_base = bucket_base(p, cur_delta);
             uint h_empty = hash(b);
