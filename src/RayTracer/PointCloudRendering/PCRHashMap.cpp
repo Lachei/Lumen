@@ -14,9 +14,10 @@ void PCRHashMap::init() {
 	vec3 bounds_min= vec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
 	vec3 bounds_max= vec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
 	constexpr uint bins_per_side = 4000;
+	constexpr uint levels = 6; // amount of empty skip layers above the base layer (The top level has 2^levels * 8 blocks as children)
 	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
 
-	auto [map_size, map, empty_skip_maps, empty_skip_sizes, occupancies, color_data] = create_hash_map(data.positions, data.colors, 1, delta_grid);
+	auto [map_size, map, empty_skip_maps, empty_skip_sizes, occupancies, color_data] = create_hash_map(data.positions, data.colors, bounds_min, bounds_max, levels, delta_grid);
 	//auto new_dat = data;
 	//for(int i: i_range(3)){
 	//	new_dat.positions.insert(new_dat.positions.end(), data.positions.begin(), data.positions.end());
@@ -40,20 +41,32 @@ void PCRHashMap::init() {
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
 							  color_data.size() * sizeof(color_data[0]), color_data.data(), true); 
 
-	empty_skip_buffer.create("Empty skip map", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	int c{};
+	std::vector<uint> empty_skip_infos_data{levels};
+	for(auto& empty_skip_buffer: empty_skip_buffers){
+		empty_skip_buffer.create(("Empty skip buffer " + std::to_string(c)).c_str(), &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+								VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+								empty_skip_maps.front().size() * sizeof(empty_skip_maps.front()[0]), empty_skip_maps.front().data(), true); 
+		empty_skip_infos_data.emplace_back(empty_skip_sizes[c++]);
+		// CARE: the address might be wrong endian
+		uint64_t addr = empty_skip_buffer.get_device_address();
+		empty_skip_infos_data.emplace_back(uint(addr >> 32));
+		empty_skip_infos_data.emplace_back(uint(addr));
+	}
+
+	empty_skip_infos.create("Empty skip infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  empty_skip_maps.front().size() * sizeof(empty_skip_maps.front()[0]), empty_skip_maps.front().data(), true); 
+							  sizeof(EmptySkipInfos::levels) + sizeof(EmptySkipInfo) * levels, empty_skip_infos_data.data(), true);
 
 	HashMapConstants constant_infos{
 		.bounds_min = bounds_min,
 		.bounds_max = bounds_max,
 		.delta_grid = delta_grid,
 		.hash_map_size = uint(map_size),
-		.empty_skip_size = empty_skip_sizes.front(),
 		.hash_map_addr = hash_map_buffer.get_device_address(),
 		.occupancies_addr = occupancies_buffer.get_device_address(),
 		.data_addr = data_buffer.get_device_address(),
-		.empty_skip_addr = empty_skip_buffer.get_device_address()
+		.empty_infos_addr = empty_skip_infos.get_device_address()
 	};
 	constant_infos_buffer.create("Constant infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
 							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
@@ -116,5 +129,7 @@ void PCRHashMap::destroy() {
 	hash_map_buffer.destroy();
 	occupancies_buffer.destroy();
 	data_buffer.destroy();
-	empty_skip_buffer.destroy();
+	empty_skip_infos.destroy();
+	for(auto& empty_skip_buffer: empty_skip_buffers)
+		empty_skip_buffer.destroy();
 }

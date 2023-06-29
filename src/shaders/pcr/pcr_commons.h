@@ -66,12 +66,11 @@ struct HashMapConstants{
     vec3     bounds_max;
     float    delta_grid; // the delta distance for the underlying grid. The hash grid simply is 
     uint     hash_map_size;
-    uint     empty_skip_size;
     // output buffers
     uint64_t hash_map_addr;
     uint64_t occupancies_addr;
     uint64_t data_addr;
-    uint64_t empty_skip_addr;
+    uint64_t empty_infos_addr;
 };
     
 const uint occupancy_size = 2;
@@ -94,6 +93,16 @@ struct OccupancyEntry{
 
 struct DataEntry{
     uint col;
+};
+
+struct EmptySkipInfo{
+    uint     map_size;
+    uint64_t map_addr;
+};
+
+struct EmptySkipInfos{
+    uint levels;
+    EmptySkipInfo infos[];
 };
 
 #define BIT_CALCS(base_pos, p, d) vec3 rel = p - base_pos;\
