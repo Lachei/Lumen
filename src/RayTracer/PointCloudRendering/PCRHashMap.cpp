@@ -4,6 +4,25 @@
 #include "BuildHashMap.h"
 
 //#define PRINT_FRAME_TIME
+dvec3 el_wise_min(const dvec3& a, const dvec3& b){
+	return {std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
+}
+dvec3 el_wise_max(const dvec3& a, const dvec3& b){
+	return {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
+}
+void normalize_positions_inplace(std::span<vec3> positions, dvec3& bounds_min, dvec3& bounds_max){
+	dvec3 diffs = bounds_max - bounds_min;
+	double div = std::max(std::max(diffs.x, diffs.y), diffs.z);
+	dvec3 min_pos;
+	dvec3 max_pos;
+	for(auto& p: positions){
+		p = (dvec3(p) - bounds_min) / div * 2. - diffs / div;
+		min_pos = el_wise_min(min_pos, p);
+		max_pos = el_wise_max(max_pos, p);
+	}
+	bounds_min = -diffs / div;
+	bounds_max = diffs / div;
+}
 
 void PCRHashMap::init() {
 	// Loading the point cload data
@@ -11,9 +30,10 @@ void PCRHashMap::init() {
 		std::cout << "Missing point cloud file for point cloud rendering" << std::endl;
 	LASFile las_file(config["point_cloud"].get<std::string>());
 	auto data = las_file.load_point_cloud_data();
-	vec3 bounds_min= vec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
-	vec3 bounds_max= vec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
-	constexpr uint bins_per_side = 8000;
+	dvec3 bounds_min= dvec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
+	dvec3 bounds_max= dvec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
+	normalize_positions_inplace(data.positions, bounds_min, bounds_max);
+	constexpr uint bins_per_side = 4000;
 	constexpr uint levels = 3; // amount of empty skip layers above the base layer (The top level has 2^levels * 8 blocks as children)
 	float delta_grid = std::max({(bounds_max.x - bounds_min.x) / bins_per_side, (bounds_max.y - bounds_min.y) / bins_per_side, (bounds_max.z - bounds_min.z) / bins_per_side});
 

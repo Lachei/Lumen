@@ -32,7 +32,7 @@ template<> struct std::hash<ivec3>{
     }
 };
 
-inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, vec3 bounds_min, vec3 bounds_max, uint empty_skip_layer, float delta_grid){
+inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::vector<uint>& colors, dvec3 bounds_min, dvec3 bounds_max, uint empty_skip_layer, float delta_grid){
     struct ColorInfo{uint color, count;};
     auto start = std::chrono::system_clock::now();
     vec3 diff = bounds_max - bounds_min;
@@ -43,12 +43,12 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
     HashMap map(map_size, HashMapEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1), .occupancy_index = uint(-1)});
-    std::vector<EmptySkipMap> empty_skip_maps(empty_skip_layer, EmptySkipMap(map_size / 8, EmptySkipEntry{.key = {box_unused, 0, 0}, .next = NEXT_T(-1)}));
+    std::vector<EmptySkipMap> empty_skip_maps(empty_skip_layer, EmptySkipMap(map_size / 8, EmptySkipEntry{.key = {box_unused, 0, 0}, .used_children = {}, .next = NEXT_T(-1)}));
     std::vector<uint> empty_skip_sizes(empty_skip_layer, map_size / 8);
     OccupVec occupancies;
     std::cout << "Starting hash map creation" << std::endl;
     for(size_t point: s_range(points)){
-        const auto& p = points[point];
+        auto p = points[point];
         auto col = colors[point];
         i16vec3 bucket = bucket_pos(p, delta_grid);
         vec3 bucket_b = bucket_base(bucket, delta_grid);

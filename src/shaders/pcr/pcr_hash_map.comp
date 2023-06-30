@@ -49,7 +49,7 @@ float calc_t(vec3 p, vec3 rd, vec3 delta, float s){
                     : ((ceil(p.z*s) - p.z*s)/s)*delta.z; 
 
                     //+0.01 to get rid of a bunch of artifacts
-    return min(t.x,min(t.y,t.z))+0.001;
+    return min(t.x,min(t.y,t.z))+0.0001;
 }
 
 // returns the intersection point with the AABB defined by b_min and b_max, code from https://www.shadertoy.com/view/wtSyRd
@@ -67,7 +67,7 @@ vec3 intersection(vec3 ray_origin, vec3 ray_dir, vec3 minpos, vec3 maxpos){
     if(traversehi < max(traverselow, 0.0))
         return vec3(1./0);
 
-    return ray_origin + (traverselow + .01) * ray_dir; 
+    return ray_origin + (traverselow + .001) * ray_dir; 
 }
 
 // adopted from https://stackoverflow.com/a/26697650
@@ -90,7 +90,7 @@ void main(){
     vec4 dir = pc.cam_proj_inv * vec4(norm_dev_coords.x, norm_dev_coords.y, 1, 1);
     float dist = length(dir.xyz);
     dir = pc.cam_view_inv * vec4(normalize(dir.xyz), 0);
-    vec4 p = origin + .1 * dist * dir;
+    vec4 p = origin + .01 * dist * dir;
 
     // calculating starting position (first intersection with the whole volume)
     // only do if not already in the bounding box
@@ -114,13 +114,13 @@ void main(){
         return;
     }
 
-    vec3 delta = 1./max(abs(dir.xyz), 1e-3);
+    vec3 delta = 1./abs(dir.xyz);// 1./max(abs(dir.xyz), 1e-3);
 
     HashMapEntry cur_entry;
     OccupancyEntry occupancy_entry; // only is loaded if successfully found hash map stuff
     cur_entry.key.x = box_unused;
     bool error = false;
-    for(int i = 0; i < 500 && inside_aabb(p.xyz, b_min, b_max); ++i){
+    for(int i = 0; i < 200 && inside_aabb(p.xyz, b_min, b_max); ++i){
         float cur_delta = constants.c.delta_grid;
         
         // ---------------------------------------------------

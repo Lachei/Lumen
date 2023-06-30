@@ -164,10 +164,10 @@ INLINE uint hash_int(int i){
 INLINE uint hash(i16vec3 b){
     //b ^= i16vec3(0xaaaa);
     //int p1 = 73856093, p2 = 19349669, p3 = 83492791;
-    int p1 = 73856093, p2 = 19998029, p3 = 83492791;
-    //int h = ((p1 * int(b.x)) ^ ((b.y) * p2) ^ ((b.z) * p3));
+    int p1 = 1, p2 = 19998029, p3 = 83492791;
+    int h = ((p1 * int(b.x)) ^ ((b.y) * p2) ^ ((b.z) * p3));
     //uint h = (hash_int(b.x) << 2) ^ (hash_int(b.y) << 1) ^ hash_int(b.z);
-    uint h = b.x ^ (hash_int(b.y) << 1) ^ (hash_int(b.z) << 2);
+    //uint h = b.x ^ (hash_int(b.y) << 1) ^ (hash_int(b.z) << 2);
 #ifdef __cplusplus
     return reinterpret_cast<uint&>(h);
 #else
