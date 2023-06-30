@@ -19,13 +19,18 @@ using uint = uint32_t;
 #define INLINE inline
 #define INOUT_OCCUPANCY OccupancyEntry&
 #define IN_OCCUPANCY const OccupancyEntry&
+#define INOUT_SKIP EmptySkipEntry&
+#define IN_SKIP const EmptySkipEntry&
 #define bit_count(x) std::popcount(x)
 #else
 #define ALIGN16
 #define INLINE
 #define INOUT_OCCUPANCY inout OccupancyEntry
 #define IN_OCCUPANCY in OccupancyEntry
+#define INOUT_SKIP inout EmptySkipEntry
+#define IN_SKIP in EmptySkipEntry
 #define bit_count(x) bitCount(x)
+#define assert(x)
 #endif
 
 #define NEXT_T uint
@@ -84,6 +89,7 @@ struct HashMapEntry{
 
 struct EmptySkipEntry{
     i16vec3 key;
+    uint16_t used_children; // check for child index with  set_chiild_bit function
     NEXT_T next;
 };
 
@@ -118,6 +124,23 @@ INLINE void set_bit(INOUT_OCCUPANCY entry, vec3 base_pos, vec3 p, float d){
 INLINE bool check_bit(IN_OCCUPANCY entry, vec3 base_pos, vec3 p, float d){
     BIT_CALCS(base_pos, p, d);
     return (entry.occupancy[lin_block][bank] & (1 << bit)) != 0;
+}
+
+#define SKIP_BIT_POS(base_pos, p, d) vec3 rel = p - base_pos;\
+    ivec3 index = ivec3(floor(rel * 2.f / d));\
+    assert(index.x < 2 && index.y < 2 && index.z < 2);\
+    uint bit = (index.z << 2) | (index.y << 1) | index.x;
+    
+INLINE void set_child_bit(INOUT_SKIP entry, vec3 base_pos, vec3 p, float d){
+    d *= box_per_hash_box;
+    SKIP_BIT_POS(base_pos, p, d);
+    entry.used_children |= int16_t(1 << bit);
+}
+
+INLINE bool check_child_bit(IN_SKIP entry, vec3 base_pos, vec3 p, float d){
+    d *= box_per_hash_box;
+    SKIP_BIT_POS(base_pos, p, d);
+    return (entry.used_children & (1 << bit)) != 0;
 }
 
 INLINE i16vec3 bucket_pos(vec3 p, float d){

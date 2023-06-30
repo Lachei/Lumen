@@ -112,7 +112,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         for(size_t i: s_range(empty_skip_maps)){
             float cur_delta = delta_grid * (2 << i); // delta starts at 2 times the standard delta
             i16vec3 b = bucket_pos(p, cur_delta);
-            vec3 b_base = bucket_base(p, cur_delta);
+            vec3 b_base = bucket_base(b, cur_delta);
             uint h_empty = hash(b);
             uint empty_index = hash_table_index(h_empty, empty_skip_sizes[i]);
 
@@ -139,6 +139,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
                 }
             }
             longest_skip_link = std::max(longest_skip_link, link_length);
+            set_child_bit(*empty_entry, b_base, p, cur_delta);
         }
         
         auto& occupancy = occupancies[map_entry->occupancy_index];

@@ -127,11 +127,13 @@ void main(){
         // Checking for empty space to skip
         // ---------------------------------------------------
         uint map_mult = constants.c.empty_space_levels; // if larger than 0 then the bucket is empty (iteration did not run until the end)
+        bool child_used = false;
         for(; map_mult > 0; --map_mult){
             const float d = constants.c.delta_grid  * (1 << map_mult); // 1 is shifted instead of 2 in BuildHashMap.h as map_mult starts at 1
             const EmptySkipInfo info = empty_skip_infos.infos[map_mult - 1];
 
             i16vec3 empty_space_bucket = bucket_pos(p.xyz, d);
+            vec3 empty_base = bucket_base(empty_space_bucket, d);
             uint empty_h = hash(empty_space_bucket);
             uint empty_index = hash_table_index(empty_h, info.map_size);
             EmptySkipMap empty_skip_map = EmptySkipMap(info.map_addr);
@@ -141,9 +143,16 @@ void main(){
 
             if(empty_entry.key != empty_space_bucket) // bucket contains no data
                 break;
+            
+            // checking child
+            child_used = check_child_bit(empty_entry, empty_base, p.xyz, d);
+            if(!child_used){
+                --map_mult;
+                break;
+            }
         }
 
-        if(map_mult > 0){
+        if(map_mult > 0 || !child_used){ // the or is needed in case level 1 detects empty child
             cur_delta = hash_bucket_delta * (1 << map_mult);
         }
         else{ // space is not empty -> check further
