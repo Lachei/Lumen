@@ -38,7 +38,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
     vec3 diff = bounds_max - bounds_min;
     float highest_diff = std::max(std::max(diff.x, diff.y), diff.z);
     uint32_t map_size = points.size() / 10;//std::ceil(points.size() / float(box_per_hash_box_cube));
-    uint32_t longest_link{};
+    uint32_t longest_link{}, longest_skip_link{};
     robin_hood::unordered_set<uint> used_buckets;
     robin_hood::unordered_map<uint, std::vector<ColorInfo>> index_to_colors;
     // trying to create the hash map, if not increasing the map size and retry
@@ -86,7 +86,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
             }
             else{
                 // now linear search for free bucket
-                while(map_entry->key != bucket && map_entry->next != uint16_t(-1)){
+                while(map_entry->key != bucket && map_entry->next != NEXT_T(-1)){
                     ++link_length;
                     index = (index + map_entry->next) % map_size;
                     map_entry = &map[index];
@@ -110,7 +110,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
         // adding the point to the empty skip maps
         assert(empty_skip_maps.size() == empty_skip_sizes.size());
         for(size_t i: s_range(empty_skip_maps)){
-            float cur_delta = delta_grid * (1 << i); // delta starts at 2 times the standard delta
+            float cur_delta = delta_grid * (2 << i); // delta starts at 2 times the standard delta
             i16vec3 b = bucket_pos(p, cur_delta);
             vec3 b_base = bucket_base(p, cur_delta);
             uint h_empty = hash(b);
@@ -118,7 +118,9 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
 
             auto empty_entry = &empty_skip_maps[i][empty_index];
             const bool empty_empty = empty_entry->key.x == box_unused;
-            const bool empty_same_box = !empty && empty_entry->key == bucket;
+            const bool empty_same_box = !empty_empty && empty_entry->key == b;
+
+            uint link_length = 0;
             
             if(empty_empty)
                 empty_entry->key = b;
@@ -127,14 +129,16 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
                 while(empty_entry->key != b && empty_entry->next != NEXT_T(-1)){
                     empty_index = empty_entry->next;
                     empty_entry = &empty_skip_maps[i][empty_index];
+                    ++link_length;
                 }
                 
                 if(empty_entry->key != b){
-                    map_entry->next = NEXT_T(empty_skip_maps[i].size());
+                    empty_entry->next = NEXT_T(empty_skip_maps[i].size());
                     empty_skip_maps[i].emplace_back(EmptySkipEntry{.key = b, .next = NEXT_T(-1)});
                     empty_entry = &empty_skip_maps[i].back();
                 }
             }
+            longest_skip_link = std::max(longest_skip_link, link_length);
         }
         
         auto& occupancy = occupancies[map_entry->occupancy_index];
@@ -210,7 +214,7 @@ inline HashMapInfos create_hash_map(const std::vector<vec3>& points, const std::
 
     std::cout << "Overall collisions: " << map.size() - map_size << std::endl;
     std::cout << "Overall map size: " << map.size() << "(original: " << map_size << ")" << std::endl;
-    std::cout << "Longest linked list: " << longest_link << std::endl;
+    std::cout << "Longest linked list: " << longest_link << ", longest skip link " << longest_skip_link << std::endl;
     std::cout << "Bucket usage rate: " << float(used_buckets.size()) / map_size << std::endl;
     map.shrink_to_fit();
     auto end = std::chrono::system_clock::now();

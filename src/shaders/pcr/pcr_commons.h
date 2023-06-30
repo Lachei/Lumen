@@ -54,7 +54,7 @@ struct ShaderAtomic{
 };
 
 
-const uvec2 hash_map_size_xy = uvec2(32, 32);
+const uvec2 hash_map_size_xy = uvec2(32, 8);
 const uint box_per_hash_box = 8; // has to be multiple of 4 (base compression block stores 4x4x4)
 const uint box_per_hash_box_cube = box_per_hash_box * box_per_hash_box * box_per_hash_box;
 const uint uints_per_hash = box_per_hash_box / 4;
@@ -66,6 +66,7 @@ struct HashMapConstants{
     vec3     bounds_max;
     float    delta_grid; // the delta distance for the underlying grid. The hash grid simply is 
     uint     hash_map_size;
+    uint     empty_space_levels;
     // output buffers
     uint64_t hash_map_addr;
     uint64_t occupancies_addr;
@@ -97,12 +98,8 @@ struct DataEntry{
 
 struct EmptySkipInfo{
     uint     map_size;
+    uint     fill;
     uint64_t map_addr;
-};
-
-struct EmptySkipInfos{
-    uint levels;
-    EmptySkipInfo infos[];
 };
 
 #define BIT_CALCS(base_pos, p, d) vec3 rel = p - base_pos;\

@@ -20,12 +20,13 @@ layout(buffer_reference, scalar) buffer HashMap  { HashMapEntry d[]; };
 layout(buffer_reference, scalar) buffer Occupancies { OccupancyEntry d[]; };
 layout(buffer_reference, scalar) buffer Data     { DataEntry d[]; };
 layout(buffer_reference, scalar) buffer EmptySkipMap{ EmptySkipEntry d[]; };
+layout(buffer_reference, scalar) buffer EmptySkipInfosBuffer{ EmptySkipInfo infos[]; };
 
 ConstantInfos constants = ConstantInfos(pc.info_addr);
 HashMap hash_map = HashMap(constants.c.hash_map_addr);
 Occupancies occupancies = Occupancies(constants.c.occupancies_addr);
 Data data = Data(constants.c.data_addr);
-EmptySkipMap empty_skip_map = EmptySkipMap(constants.c.empty_skip_addr);
+EmptySkipInfosBuffer empty_skip_infos= EmptySkipInfosBuffer(constants.c.empty_infos_addr);
 
 const bool show_hash_grid = false;
 const bool show_iteration_count = false;
@@ -125,16 +126,26 @@ void main(){
         // ---------------------------------------------------
         // Checking for empty space to skip
         // ---------------------------------------------------
-        const float map_mult = 32;
-        i16vec3 empty_space_bucket = bucket_pos(p.xyz, constants.c.delta_grid * map_mult);
-        uint empty_h = hash(empty_space_bucket);
-        uint empty_index = hash_table_index(empty_h, constants.c.empty_skip_size);
-        EmptySkipEntry empty_entry = empty_skip_map.d[empty_index];
-        for(int j = 0; j < 10 && empty_entry.key != empty_space_bucket && empty_entry.next != NEXT_T(-1); ++j)
-            empty_entry = empty_skip_map.d[empty_entry.next];
+        uint map_mult = constants.c.empty_space_levels; // if larger than 0 then the bucket is empty (iteration did not run until the end)
+        for(; map_mult > 0; --map_mult){
+            const float d = constants.c.delta_grid  * (1 << map_mult); // 1 is shifted instead of 2 in BuildHashMap.h as map_mult starts at 1
+            const EmptySkipInfo info = empty_skip_infos.infos[map_mult - 1];
 
-        if(empty_entry.key != empty_space_bucket)
-            cur_delta = hash_bucket_delta * map_mult;
+            i16vec3 empty_space_bucket = bucket_pos(p.xyz, d);
+            uint empty_h = hash(empty_space_bucket);
+            uint empty_index = hash_table_index(empty_h, info.map_size);
+            EmptySkipMap empty_skip_map = EmptySkipMap(info.map_addr);
+            EmptySkipEntry empty_entry = empty_skip_map.d[empty_index];
+            for(int j = 0; j < 10 && empty_entry.key.x != box_unused && empty_entry.key != empty_space_bucket && empty_entry.next != NEXT_T(-1); ++j)
+                empty_entry = empty_skip_map.d[empty_entry.next];
+
+            if(empty_entry.key != empty_space_bucket) // bucket contains no data
+                break;
+        }
+
+        if(map_mult > 0){
+            cur_delta = hash_bucket_delta * (1 << map_mult);
+        }
         else{ // space is not empty -> check further
             // ---------------------------------------------------
             // loading the bucket information, only try, if not available continue
@@ -145,7 +156,7 @@ void main(){
                 uint h = hash(cur_bucket);
                 uint index = hash_table_index(h, constants.c.hash_map_size);
                 cur_entry = hash_map.d[index];
-                for(int j = 0; j < 10 && cur_entry.key != cur_bucket && cur_entry.next != NEXT_T(-1); ++j){
+                for(int j = 0; j < 10 && cur_entry.key.x != box_unused && cur_entry.key != cur_bucket && cur_entry.next != NEXT_T(-1); ++j){
                     index = cur_entry.next;
                     //index %= constants.c.hash_map_size;
                     cur_entry = hash_map.d[index];
