@@ -14,13 +14,13 @@ void Integrator::init() {
 
 	if (lumen_scene->config.cam_settings.pos != vec3(0)) {
 		camera = std::unique_ptr<PerspectiveCamera>(new PerspectiveCamera(
-			lumen_scene->config.cam_settings.fov, 0.01f, 1000.0f, (float)instance->width / instance->height,
+			lumen_scene->config.cam_settings.fov, 0.00001f, 100.0f, (float)instance->width / instance->height,
 			lumen_scene->config.cam_settings.dir, lumen_scene->config.cam_settings.pos));
 	} else {
 		// Assume the camera matrix is given
 		camera = std::unique_ptr<PerspectiveCamera>(
 			new PerspectiveCamera(lumen_scene->config.cam_settings.fov, lumen_scene->config.cam_settings.cam_matrix,
-								  0.01f, 1000.0f, (float)instance->width / instance->height));
+								  0.00001f, 100.0f, (float)instance->width / instance->height));
 	}
 
 	Camera* cam_ptr = camera.get();
@@ -256,7 +256,7 @@ void Integrator::update_camera() {
 
 	const glm::vec3 up{0,1,0};
 	glm::vec3 translation{};
-	float trans_speed = static_cast<float>(std::min(delta_t, 500.));
+	float trans_speed = static_cast<float>(std::min(10 * delta_t, 500.));
 	glm::vec3 front;
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_SHIFT)) {
 		trans_speed *= 4;

@@ -1,6 +1,7 @@
 #include "LumenPCH.h"
 #include "PCRShaderAtomic.h"
 #include "LASFile.h"
+#include "util.h"
 
 #define PRINT_FRAME_TIME
 
@@ -10,6 +11,9 @@ void PCRShaderAtomic::init() {
 		std::cout << "Missing point cloud file for point cloud rendering" << std::endl;
 	LASFile las_file(config["point_cloud"].get<std::string>());
 	auto data = las_file.load_point_cloud_data();
+	dvec3 bounds_min= dvec3(las_file.header.min_x, las_file.header.min_z, las_file.header.min_y);
+	dvec3 bounds_max= dvec3(las_file.header.max_x, las_file.header.max_z, las_file.header.max_y);
+	normalize_positions_inplace(data.positions, bounds_min, bounds_max);
 	//auto new_dat = data;
 	//for(int i: i_range(3)){
 	//	new_dat.positions.insert(new_dat.positions.end(), data.positions.begin(), data.positions.end());
