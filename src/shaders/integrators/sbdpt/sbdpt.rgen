@@ -1,0 +1,112 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../../commons.glsl"
+layout(push_constant) uniform _PushConstantRay { PushConstantRay pc_ray; };
+// VCM buffers
+
+layout(buffer_reference, scalar) buffer LightVertices { VCMVertex d[]; };
+layout(buffer_reference, scalar) buffer ColorStorages { vec3 d[]; };
+layout(buffer_reference, scalar) buffer LightPathCnt { uint d[]; };
+
+LightVertices vcm_lights = LightVertices(scene_desc.light_vertices_addr);
+ColorStorages tmp_col = ColorStorages(scene_desc.color_storage_addr);
+LightPathCnt light_path_cnts = LightPathCnt(scene_desc.path_cnt_addr);
+
+uint screen_size = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
+
+const uint flags = gl_RayFlagsOpaqueEXT;
+const float tmin = 0.001;
+const float tmax = 10000.0;
+#define RR_MIN_DEPTH 3
+uint pixel_idx = (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y);
+uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
+                      pc_ray.frame_num ^ pc_ray.random_num);
+uint vcm_light_path_idx =
+    (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y) *
+    (pc_ray.max_depth + 1);
+
+#include "../sbdpt_commons.glsl"
+void main() {
+#define JITTER 0
+
+    const vec2 pixel = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+#if JITTER
+    vec2 rands = vec2(rand(seed), rand(seed)) - 0.5;
+    const vec2 in_uv = (pixel + rands) / vec2(gl_LaunchSizeEXT.xy);
+#else
+    const vec2 in_uv = (pixel) / vec2(gl_LaunchSizeEXT.xy);
+#endif
+    vec2 d = in_uv * 2.0 - 1.0;
+    vec4 origin = ubo.inv_view * vec4(0, 0, 0, 1);
+    vec4 target = ubo.inv_projection * vec4(d.x, d.y, 1, 1);
+    vec3 direction = vec3(sample_camera(d));
+    vec3 col = vec3(0);
+    vec4 area_int = (ubo.inv_projection * vec4(2. / gl_LaunchSizeEXT.x,
+                                               2. / gl_LaunchSizeEXT.y, 0, 1));
+    area_int /= (area_int.w);
+    const float cam_area = abs(area_int.x * area_int.y);
+    const float radius = pc_ray.radius;
+    const float radius_sqr = radius * radius;
+
+
+    VCMState vcm_state;
+#define light_vtx(i) vcm_lights.d[vcm_light_path_idx + i]
+    float eta_vcm = PI * radius_sqr * screen_size;
+    float eta_vc = (pc_ray.use_vc == 1) ? 1.0 / eta_vcm : 0;
+    float eta_vm = (pc_ray.use_vm == 1) ? PI * radius_sqr * screen_size : 0;
+    bool specular = false;
+    bool result;
+    bool finite;
+    
+    if (!vcm_generate_light_sample(eta_vc, vcm_state, finite)) {
+        return;
+    }
+    
+    vcm_fill_light(origin.xyz, vcm_state, finite, eta_vcm, eta_vc, eta_vm);
+#undef light_vtx
+
+
+    eta_vcm = PI * radius_sqr * screen_size;
+    eta_vc = pc_ray.use_vc == 1 ? 1.0 / eta_vcm : 0;
+    eta_vm = pc_ray.use_vm == 1 ? PI * radius_sqr * screen_size : 0;
+    VCMState camera_state;
+    // Generate camera sample
+    camera_state.wi = direction;
+    camera_state.pos = origin.xyz;
+    camera_state.throughput = vec3(1.0);
+    camera_state.n_s = vec3(-ubo.inv_view * vec4(0, 0, 1, 0));
+    float cos_theta = abs(dot(camera_state.n_s, direction));
+    // Defer r^2 / cos term
+    camera_state.d_vcm =
+        cam_area * screen_size * cos_theta * cos_theta * cos_theta;
+    camera_state.d_vc = 0;
+    camera_state.d_vm = 0;
+
+    col = vcm_trace_eye(camera_state, eta_vcm, eta_vc, eta_vm);
+    if (isnan(luminance(col))) {
+        debugPrintfEXT("nan\n");
+        return;
+    }
+    vec3 splat_img = tmp_col.d[pixel_idx];
+    col += splat_img;
+    tmp_col.d[pixel_idx] = vec3(0);
+//#undef light_vtx
+    if (pc_ray.frame_num > 0) {
+        float w = 1. / float(pc_ray.frame_num + 1);
+        vec3 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+        // imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy),
+                   vec4(mix(old_col, col, w), 1.f));
+    } else {
+
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+    }
+}

@@ -1,0 +1,482 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../../commons.glsl"
+layout(push_constant) uniform _PushConstantRay { PushConstantRay pc_ray; };
+// VCM buffers
+
+layout(buffer_reference, scalar) buffer LightVertices { VCMVertex d[]; };
+layout(buffer_reference, scalar) buffer LightVerticesReservoirs { VCMVertex d[]; };
+layout(buffer_reference, scalar) buffer LightPathReservoirs { LightPathReservoir d[]; };
+layout(buffer_reference, scalar) buffer ColorStorages { vec3 d[]; };
+layout(buffer_reference, scalar) buffer LightPathCnt { uint d[]; };
+
+LightVertices vcm_lights = LightVertices(scene_desc.light_vertices_addr);
+LightVerticesReservoirs light_vertices_reservoirs = LightVerticesReservoirs(scene_desc.light_vertices_reservoirs_addr);
+LightPathReservoirs light_path_reservoirs = LightPathReservoirs(scene_desc.light_path_reservoirs_addr);
+ColorStorages tmp_col = ColorStorages(scene_desc.color_storage_addr);
+LightPathCnt light_path_cnts = LightPathCnt(scene_desc.path_cnt_addr);
+
+uint screen_size = gl_LaunchSizeEXT.x * gl_LaunchSizeEXT.y;
+
+const uint flags = gl_RayFlagsOpaqueEXT;
+const float tmin = 0.001;
+const float tmax = 10000.0;
+#define RR_MIN_DEPTH 3
+uint pixel_idx = (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y);
+uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
+                      pc_ray.total_frame_num);
+uint light_path_idx =
+    (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y) *
+    (pc_ray.max_depth + 1);
+
+uint pixels = pc_ray.size_x * pc_ray.size_y;
+uint ping_pong_offset = pc_ray.total_frame_num % 2 == 0 ? pixels : 0;
+uint path_length_factor = (pc_ray.max_depth + 1);
+
+
+#define light_vtx(i) vcm_lights.d[light_path_idx + i]
+#define reservoir_light_vtx(i) light_vertices_reservoirs.d[light_path_idx + i]
+
+//#include "../sbdpt_commons.glsl"
+
+float target_function_mis(in VCMVertex light_vertex, in vec3 cam_hit_pos, in vec3 cam_hit_normal, in vec3 wo, in Material mat,
+                        in VCMState camera_state, out vec3 L_connect, in bool check_vis, in float W) {
+    
+    float result = 0;
+    
+
+
+    /*if (light_vertex.material_idx == -1) {
+        L_connect = vec3(1,1,1);//vec3(light_path_cnts.d[pixel_idx]);
+        return 0.f;
+    } */
+    L_connect = vec3(0);//vec3(light_path_cnts.d[pixel_idx]);
+    
+    
+    //const Material light_mat = load_material(light_vertex.material_idx, light_vertex.uv);
+    // connect vertices
+    vec3 dir = light_vertex.pos - cam_hit_pos;
+    const float len = length(dir);
+    const float len_sqr = len * len;
+    dir /= len;
+    const float cos_cam = dot(cam_hit_normal, dir);
+    const float cos_light = dot(light_vertex.n_s, -dir);
+    
+    const float G = cos_light * cos_cam / len_sqr;
+
+    if (G > 0) {
+        float cam_pdf_fwd, light_pdf_fwd, light_pdf_rev, pdf_rev;
+        const vec3 f_cam =
+            eval_bsdf(cam_hit_normal, wo, mat, 1, false, dir, cam_pdf_fwd, pdf_rev, cos_cam);
+            
+        const Material light_mat =
+            load_material(light_vertex.material_idx,
+                            light_vertex.uv);
+
+        const vec3 f_light =
+            eval_bsdf(light_vertex.n_s,
+                        -light_vertex.wi, light_mat, 0,
+                        false, -dir,
+                        light_pdf_fwd, light_pdf_rev, cos_light);
+        
+        if (f_light != vec3(0) && f_cam != vec3(0)) {
+            cam_pdf_fwd *= abs(cos_light) / len_sqr;
+            light_pdf_fwd *= abs(cos_cam) / len_sqr;
+
+            const float w_light =
+                cam_pdf_fwd *
+                (light_vertex.d_vcm  * light_vertex.pdf_emit * W+
+                    light_pdf_rev * light_vertex.d_vc)* light_vertex.pdf_emit * W;
+            const float w_camera = 
+                light_pdf_fwd *
+                (camera_state.d_vcm + pdf_rev * camera_state.d_vc);
+
+            
+            bool visible = true;
+            if (check_vis) {
+                const vec3 ray_origin = offset_ray2(cam_hit_pos, cam_hit_normal);
+                any_hit_payload.hit = 1;
+                traceRayEXT(tlas,
+                            gl_RayFlagsTerminateOnFirstHitEXT |
+                                gl_RayFlagsSkipClosestHitShaderEXT,
+                            0xFF, 1, 0, 1, ray_origin, 0, dir, len - EPS, 1);
+                visible = any_hit_payload.hit == 0;
+            }
+
+            if (visible) {
+                float mis_weight = 1. / (1 + w_light + w_camera);
+                L_connect = mis_weight * G * camera_state.throughput * f_cam * light_vertex.throughput * f_light;
+                result = luminance(L_connect);
+            }
+        }
+    }
+    return result;
+}
+
+
+
+
+float target_function(in VCMVertex light_vertex, in vec3 cam_hit_pos, in vec3 cam_hit_normal, in vec3 wo, in Material mat,
+                        in VCMState camera_state, out vec3 L_connect, in bool check_vis) {
+    
+    float result = 0;
+    
+
+
+    /*if (light_vertex.material_idx == -1) {
+        L_connect = vec3(0,0,0);//vec3(light_path_cnts.d[pixel_idx]);
+        return 0.f;
+    }*/ 
+    L_connect = vec3(0);//vec3(light_path_cnts.d[pixel_idx]);
+    
+    //const Material light_mat = load_material(light_vertex.material_idx, light_vertex.uv);
+    // connect vertices
+    vec3 dir = light_vertex.pos - cam_hit_pos;
+    const float len = length(dir);
+    const float len_sqr = len * len;
+    dir /= len;
+    const float cos_cam = dot(cam_hit_normal, dir);
+    const float cos_light = dot(light_vertex.n_s, -dir);
+    
+    const float G = cos_light * cos_cam / len_sqr;
+
+    if (G > 0) {
+        float cam_pdf_fwd, light_pdf_fwd, light_pdf_rev, pdf_rev;
+        const vec3 f_cam =
+            eval_bsdf(cam_hit_normal, wo, mat, 1, false, dir, cam_pdf_fwd, pdf_rev, cos_cam);
+            
+        const Material light_mat =
+            load_material(light_vertex.material_idx,
+                            light_vertex.uv);
+
+        const vec3 f_light =
+            eval_bsdf(light_vertex.n_s,
+                        -light_vertex.wi, light_mat, 0,
+                        false, -dir,
+                        light_pdf_fwd, light_pdf_rev, cos_light);
+        
+        if (f_light != vec3(0) && f_cam != vec3(0)) {
+            cam_pdf_fwd *= abs(cos_light) / len_sqr;
+            light_pdf_fwd *= abs(cos_cam) / len_sqr;
+
+            const float w_light =
+                cam_pdf_fwd *
+                (light_vertex.d_vcm +
+                    light_pdf_rev * light_vertex.d_vc);
+            const float w_camera = 
+                light_pdf_fwd *
+                (camera_state.d_vcm + pdf_rev * camera_state.d_vc);
+
+            
+            bool visible = true;
+            if (check_vis) {
+                const vec3 ray_origin = offset_ray2(cam_hit_pos, cam_hit_normal);
+                any_hit_payload.hit = 1;
+                traceRayEXT(tlas,
+                            gl_RayFlagsTerminateOnFirstHitEXT |
+                                gl_RayFlagsSkipClosestHitShaderEXT,
+                            0xFF, 1, 0, 1, ray_origin, 0, dir, len - EPS, 1);
+                visible = any_hit_payload.hit == 0;
+            }
+
+            if (visible) {
+                float mis_weight =  1. / (1 + w_light + w_camera);
+                L_connect = mis_weight * G * camera_state.throughput * f_cam * (light_vertex.throughput*light_vertex.pdf_emit)* f_light;
+                result = luminance(L_connect);
+            }
+        }
+    }
+    return result;
+}
+
+float target_function_path_W_test(in vec3 cam_hit_pos, in vec3 cam_hit_normal, in vec3 wo, in Material mat, in VCMState camera_state, out vec3 L_connect_path, in bool check_vis, in bool reservoir_sample, in uint reservoir_path_count, in float W) {
+    uint light_path_len = reservoir_sample ? reservoir_path_count : light_path_cnts.d[pixel_idx];
+    float result = 0;
+    vec3 L_connect = vec3(0);
+    L_connect_path = vec3(0);
+    // W test
+    for (int i = 0; i < light_path_len; i++) {
+        /*if(i>0) {
+            return result;
+        }*/
+        if (reservoir_sample) {
+            result += target_function_mis(reservoir_light_vtx(i), cam_hit_pos, cam_hit_normal, wo, mat, camera_state, L_connect, check_vis, W);
+        } else {
+            result += target_function_mis(light_vtx(i), cam_hit_pos, cam_hit_normal, wo, mat, camera_state, L_connect, check_vis, W);
+        }
+        //if(i>4) {
+            L_connect_path += L_connect;
+          
+            
+    }
+    return result;
+}
+
+
+float target_function_path(in vec3 cam_hit_pos, in vec3 cam_hit_normal, in vec3 wo, in Material mat, in VCMState camera_state, out vec3 L_connect_path, in bool check_vis, in bool reservoir_sample, in uint reservoir_path_count, in bool read_last_frame_reservoir, in uint prev_idx) {
+
+    // t=2, we connect to the camera first hit (t=0 not considered, due to pinhole cam, t=1 already computed without resampling)
+    // if max depth = 5, then connect up to s = 5 (all light vertices)
+    //return 0;
+    uint light_path_len = reservoir_sample ? reservoir_path_count : light_path_cnts.d[pixel_idx];
+    float result = 0;
+    vec3 L_connect = vec3(0);
+    L_connect_path = vec3(0);
+
+    for (int i = 0; i < light_path_len; i++) {
+        // enable for only first hit, do the same in spatial
+        /*if(i>0) {
+            return result;
+        }*/
+        if (reservoir_sample) {
+            if(read_last_frame_reservoir) {
+                result += target_function(light_vertices_reservoirs.d[i + (prev_idx+ping_pong_offset)*path_length_factor], cam_hit_pos, cam_hit_normal, wo, mat, camera_state, L_connect, check_vis);
+
+            } else {
+                result += target_function(light_vertices_reservoirs.d[i+(pixel_idx+pixels-ping_pong_offset)*path_length_factor], cam_hit_pos, cam_hit_normal, wo, mat, camera_state, L_connect, check_vis);
+            }
+        } else {
+            result += target_function(light_vtx(i), cam_hit_pos, cam_hit_normal, wo, mat, camera_state, L_connect, check_vis);
+        }
+        
+        L_connect_path += L_connect;   
+    }
+    //result = luminance(L_connect_path);
+    return result;
+}
+
+void init_light_path_reservoir(out LightPathReservoir lpr, in vec3 cam_hit_pos, in vec3 cam_hit_normal) {
+
+    lpr.M = 0;
+    lpr.W = 0.f;
+    lpr.cam_hit_pos = cam_hit_pos;
+    lpr.cam_hit_normal = cam_hit_normal;
+    lpr.path_vertex_count = 0;
+}
+
+bool similar_projection(float view_depth, float view_depth_prev) {
+    
+    return abs(view_depth - view_depth_prev) < 0.5f;
+    //return false;
+}
+
+void write_sample_path_to_reservoir(in uint path_length) {
+    for (int i = 0; i < path_length; i++) {
+        light_vertices_reservoirs.d[i+(pixel_idx+pixels-ping_pong_offset)*path_length_factor] = light_vtx(i);
+    }
+}
+
+void copy_reservoir_vertices(in uint dst_idx, in uint src_idx, in uint src_path_length) {
+    for (int i = 0; i < src_path_length; i++) {
+         light_vertices_reservoirs.d[dst_idx * (pc_ray.max_depth + 1) + i] = light_vertices_reservoirs.d[src_idx * (pc_ray.max_depth + 1) + i];
+    }
+    
+}
+
+bool update_light_path_reservoir(inout LightPathReservoir r, inout float w_sum, in float w_i, in vec3 cam_hit_pos, in vec3 cam_hit_normal, in uint prev_idx) {
+
+    w_sum += w_i;
+    r.M++;
+    if (rand(seed) * w_sum <= w_i) {
+        r.cam_hit_pos = cam_hit_pos;
+        r.cam_hit_normal = cam_hit_normal;
+        r.path_vertex_count = light_path_cnts.d[pixel_idx];
+        write_sample_path_to_reservoir(r.path_vertex_count);
+        return true;
+    }
+    else {
+        copy_reservoir_vertices(pixel_idx+pixels-ping_pong_offset, prev_idx+ping_pong_offset, r.path_vertex_count);
+    }
+    return false;
+}
+
+
+
+vec3 resample_light_path(VCMState camera_state) {
+
+    
+    ///// camera first hit
+    traceRayEXT(tlas, flags, 0xFF, 0, 0, 0, camera_state.pos, tmin,
+        camera_state.wi, tmax, 0);
+
+    if (payload.material_idx == -1) {
+        // no light connections will be made
+        // computed in trace_eye
+        return vec3(0);
+    }
+    
+    const vec3 camera_hit_position = payload.pos;
+    vec3 wo = camera_state.pos - payload.pos;
+    float dist = length(payload.pos - camera_state.pos);
+    float dist_sqr = dist * dist;
+    wo /= dist;
+
+    vec3 n_s = payload.n_s;
+    vec3 n_g = payload.n_g;
+    bool side = true;
+    if (dot(payload.n_g, wo) < 0.)
+        n_g = -n_g;
+    if (dot(n_g, n_s) < 0) {
+        n_s = -n_s;
+        side = false;
+    }
+    float cos_wo = abs(dot(wo, n_s));
+    const Material mat = load_material(payload.material_idx, payload.uv);
+    // TODO handle specular, at the moment only test diffuse scene
+    const bool mat_specular =
+        (mat.bsdf_props & BSDF_SPECULAR) == BSDF_SPECULAR;
+    camera_state.d_vcm *= dist_sqr;
+    camera_state.d_vcm /= cos_wo;
+    camera_state.d_vc /= cos_wo;
+    camera_state.d_vm /= cos_wo;
+    /////
+    float L_connect_complete = 0.f;
+    vec3 L_connect_path = vec3(0);
+    vec3 first_test = vec3(0);
+    
+    L_connect_complete = target_function_path(camera_hit_position, n_s, wo, mat, camera_state, L_connect_path, true, false, 0, false, 0);
+    //first_test = vec3(1,0,0);
+    //return L_connect_path / light_vtx(0).pdf_emit;
+    
+    LightPathReservoir lpr;
+    uint prev_coords_idx = pixel_idx;
+    ivec2 prev_coords;
+    bool reprojection_failed = true;
+    
+    if (pc_ray.do_spatiotemporal == 0) {
+        
+        init_light_path_reservoir(lpr, camera_hit_position, n_s);
+    }
+    else {
+        vec4 prev_pos = ubo.prev_view * vec4(camera_hit_position, 1.f);
+        prev_pos /= prev_pos.z;
+        prev_pos = -ubo.prev_projection * prev_pos;
+        const vec2 prev_ndc = prev_pos.xy;
+        prev_coords = ivec2(0.5f * (1.f + prev_ndc) * gl_LaunchSizeEXT.xy); 
+
+        if (prev_coords.x >= 0 && prev_coords.x < gl_LaunchSizeEXT.x &&
+            prev_coords.y >= 0 && prev_coords.y < gl_LaunchSizeEXT.y) {
+            prev_coords_idx = prev_coords.x * gl_LaunchSizeEXT.y + prev_coords.y;
+            
+                reprojection_failed = false;
+        }
+        if (!reprojection_failed) {
+
+            LightPathReservoir temp_reservoir = light_path_reservoirs.d[prev_coords_idx + ping_pong_offset];
+            
+            if (similar_projection(length(camera_hit_position - ubo.view_pos.xyz), length(temp_reservoir.cam_hit_pos - ubo.prev_view_pos.xyz))) {
+
+                lpr = temp_reservoir;
+            }
+            else {
+                init_light_path_reservoir(lpr, camera_hit_position, n_s);
+            }
+        } else {
+            init_light_path_reservoir(lpr, camera_hit_position, n_s);
+        }
+        
+        
+    }
+
+    //copy_reservoir_vertices(pixel_idx+pixels-ping_pong_offset, prev_coords_idx+ping_pong_offset, lpr.path_vertex_count);
+    
+    float wi = L_connect_complete / light_vtx(0).pdf_emit;
+    float temporal_tf = target_function_path(camera_hit_position, n_s, wo, mat, camera_state, L_connect_path, true, true, lpr.path_vertex_count, true, prev_coords_idx);
+    //float temporal_tf = target_function_path_W_test(camera_hit_position, n_s, wo, mat, camera_state, L_connect_path, true, true, lpr.path_vertex_count, lpr.W);
+    float w_sum = temporal_tf * lpr.W * lpr.M;
+
+    bool updated = update_light_path_reservoir(lpr, w_sum, wi, camera_hit_position, n_s, prev_coords_idx);
+    w_sum /= lpr.M;
+    lpr.M = min(lpr.M, 60);
+
+    // needed? reuse the result from the winner (either L_connect_complete or temporal_tf)
+    float current_tf = target_function_path(camera_hit_position, n_s, wo, mat, camera_state, L_connect_path, true, true, lpr.path_vertex_count, false, 0);
+    /*float current_tf = 0.f;
+    if (updated) {
+        current_tf = L_connect_complete;
+    } else {
+        current_tf = temporal_tf;
+    }*/
+    //float current_tf = target_function_path_W_test(camera_hit_position, n_s, wo, mat, camera_state, L_connect_path, true, true, lpr.path_vertex_count, lpr.W);
+
+    lpr.W = current_tf <= 0.f ? 0.f : w_sum / current_tf;
+
+    light_path_reservoirs.d[pixel_idx + pixels - ping_pong_offset] = lpr;
+
+    // adjust throughput of resampled vertices
+    for(int i = 0; i < lpr.path_vertex_count; i++) {
+        //light_vtx(i) = light_vertices_reservoirs.d[i+(pixel_idx+pixels - ping_pong_offset)*path_length_factor];
+        //light_vtx(i).throughput *= lpr.W * light_vtx(i).pdf_emit;
+    }
+    //light_path_cnts.d[pixel_idx] = lpr.path_vertex_count;
+
+    
+
+    vec3 result = L_connect_path * lpr.W; //* reservoir_light_vtx(0).pdf_emit;//* lpr.W;
+    //vec3 result = first_test; //* light_vtx(0).pdf_emit;
+    return result;
+}
+
+
+void main() {
+#define JITTER 0
+
+    const vec2 pixel = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+#if JITTER
+    vec2 rands = vec2(rand(seed), rand(seed)) - 0.5;
+    const vec2 in_uv = (pixel + rands) / vec2(gl_LaunchSizeEXT.xy);
+#else
+    const vec2 in_uv = (pixel) / vec2(gl_LaunchSizeEXT.xy);
+#endif
+    vec2 d = in_uv * 2.0 - 1.0;
+    vec4 origin = ubo.inv_view * vec4(0, 0, 0, 1);
+    vec4 target = ubo.inv_projection * vec4(d.x, d.y, 1, 1);
+    vec3 direction = vec3(sample_camera(d));
+    vec3 col = vec3(0);
+    vec4 area_int = (ubo.inv_projection * vec4(2. / gl_LaunchSizeEXT.x,
+                                               2. / gl_LaunchSizeEXT.y, 0, 1));
+    area_int /= (area_int.w);
+    const float cam_area = abs(area_int.x * area_int.y);
+    /*const float radius = pc_ray.radius;
+    const float radius_sqr = radius * radius;
+    float eta_vcm = PI * radius_sqr * screen_size;
+    float eta_vc = pc_ray.use_vc == 1 ? 1.0 / eta_vcm : 0;
+    float eta_vm = pc_ray.use_vm == 1 ? PI * radius_sqr * screen_size : 0;*/
+    VCMState camera_state;
+    // Generate camera sample
+    camera_state.wi = direction;
+    camera_state.pos = origin.xyz;
+    camera_state.throughput = vec3(1.0);
+    camera_state.n_s = vec3(-ubo.inv_view * vec4(0, 0, 1, 0));
+    float cos_theta = abs(dot(camera_state.n_s, direction));
+    // Defer r^2 / cos term
+    camera_state.d_vcm =
+        cam_area * screen_size * cos_theta * cos_theta * cos_theta;
+    camera_state.d_vc = 0;
+    camera_state.d_vm = 0;
+
+
+    col = resample_light_path(camera_state);
+
+    tmp_col.d[pixel_idx] += col;
+
+    //col = vec3(1,0,0);
+    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+    /*if (pc_ray.frame_num > 1) {
+        float w = 1. / float(pc_ray.frame_num);
+        vec3 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+            //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy),
+                   vec4(mix(old_col, col, w), 1.f));
+    } else {
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+    }*/
+}

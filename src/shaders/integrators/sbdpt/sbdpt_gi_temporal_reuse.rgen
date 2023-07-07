@@ -1,0 +1,287 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../../commons.glsl"
+layout(push_constant) uniform _PushConstantRay { PushConstantRay pc_ray; };
+layout(buffer_reference, scalar) buffer RestirSamples { ReservoirSample d[]; };
+layout(buffer_reference, scalar) buffer Reservoirs { Reservoir d[]; };
+const uint flags = gl_RayFlagsOpaqueEXT;
+const float tmin = 0.001;
+const float tmax = 10000.0;
+#define RR_MIN_DEPTH 3
+#define M_MAX 60
+#define M_MAX_S 500
+uint pixel_idx = (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y);
+uvec4 seed =
+    init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy, pc_ray.total_frame_num);
+uint pixels = pc_ray.size_x * pc_ray.size_y;
+uint ping_pong_offset = pc_ray.total_frame_num % 2 == 0 ? pixels : 0;
+
+RestirSamples samples = RestirSamples(scene_desc.restir_samples_addr);
+RestirSamples old_samples = RestirSamples(scene_desc.restir_samples_old_addr);
+Reservoirs temp_reservoirs = Reservoirs(scene_desc.temporal_reservoir_addr);
+Reservoirs spatial_reservoirs = Reservoirs(scene_desc.spatial_reservoir_addr);
+void init_s(out ReservoirSample s) {
+    s.x_v = vec3(0);
+    s.n_v = vec3(0);
+    s.x_s = vec3(0);
+    s.n_s = vec3(0);
+    s.L_o = vec3(0);
+    s.f = vec3(0);
+    s.p_q = 0;
+}
+
+void init_reservoir(out Reservoir r, in ReservoirSample s) {
+    r.w_sum = 0;
+    r.W = 0;
+    r.m = 0;
+    //init_s(r.s);
+    r.s = s;
+    r.s.L_o = vec3(0);
+}
+
+// TODO change into general version
+bool update_reservoir(inout Reservoir r, inout float w_sum, const ReservoirSample s, in float w_i) {
+    w_sum += w_i;
+    r.m++;
+    if (rand(seed) * w_sum <= w_i) {
+        r.s = s;
+        return true;
+    }
+    return false;
+}
+
+bool merge_reservoir(inout Reservoir r_dest, inout Reservoir r_src, in float w_i, inout float w_sum) {
+    w_sum += w_i;
+    r_dest.m += r_src.m;
+    if (rand(seed) * w_sum <= w_i) {
+        r_dest.s.x_s = r_src.s.x_s;
+        r_dest.s.n_s = r_src.s.n_s;
+        r_dest.s.L_o = r_src.s.L_o;
+        return true;
+    }
+    return false;
+}
+
+
+/*float target_function(in vec3 radiance, in vec3 sample_pos, in vec3 pos, in vec3 normal, in vec3 bsdf_factor) {
+
+    const vec3 direction_sample = normalize(sample_pos - pos);
+    const float cosine_factor = abs(dot(direction_sample, normal));
+    
+    return luminance(radiance * bsdf_factor) * cosine_factor;
+}*/
+
+bool eval_visibility(in vec3 origin, in vec3 segment_end, bool transmissive_origin) {
+
+    vec3 dir = segment_end - origin;
+    const float len = length(dir);
+    dir /= len;
+    bool visible = true;
+
+    if (!transmissive_origin) {
+        any_hit_payload.hit = 1;
+        traceRayEXT(tlas,
+                    gl_RayFlagsTerminateOnFirstHitEXT |
+                        gl_RayFlagsSkipClosestHitShaderEXT,
+                    0xFF, 1, 0, 1, origin, 0, dir, len - EPS, 1);
+        visible = any_hit_payload.hit == 0;
+    }
+    return visible;
+}
+
+float target_function(in vec3 radiance, in vec3 sample_pos, in vec3 pos, in vec3 normal, in vec3 f, out vec3 L_connect) {
+    if(eval_visibility(pos, sample_pos, false) == false) {
+        L_connect = vec3(0);
+        return 0.f;
+    }
+
+    const vec3 direction_sample = normalize(sample_pos - pos);
+    const float cosine_factor = abs(dot(direction_sample, normal));
+
+    L_connect = radiance * f * cosine_factor;
+    //float result = (L_connect.x + L_connect.y+ L_connect.z) / 3;
+    return luminance(L_connect);
+    //return result;
+}
+
+float target_function_test(in vec3 radiance, in vec3 sample_pos, in vec3 pos, in vec3 normal) {
+
+    const vec3 direction = normalize(sample_pos - pos);
+    const float cosine_factor = clamp(dot(direction, normal), 0.f, 1.f);
+    //const float cosine_factor = abs(dot(direction, normal));
+    const float brdf = cosine_factor * INV_PI;
+    const float cosine = max(0.1f, brdf * cosine_factor);
+    return luminance(radiance * cosine);
+}
+
+float target_function_simple(in vec3 radiance, in vec3 bsdf_factor, in float cosine_factor) {
+    return luminance(radiance);
+}
+
+float p_hat(const vec3 f) { return length(f); }
+
+uint offset(const uint pingpong) {
+    return pingpong * pc_ray.size_x * pc_ray.size_y;
+}
+
+bool similar_projection(float view_depth, float view_depth_prev) {
+    
+    return view_depth / view_depth_prev > 0.98f;
+}
+
+bool similar_spatial(vec3 normal, vec3 neighbor_normal, float depth, float neighbor_depth) {
+    // % relative difference
+    float depth_threshold = 0.1f;
+    // TODO test different values
+    float normal_threshold = 0.9f;
+    float diff = abs(depth - neighbor_depth);
+    float normal_dot = dot(normal, neighbor_normal);
+    return diff / depth <= depth_threshold && normal_dot >= normal_threshold;
+}
+
+
+bool similar(ReservoirSample q, ReservoirSample q_n) {
+    const float depth_threshold = 0.5;
+    const float angle_threshold = 25 * PI / 180;
+    if (q.mat_idx != q_n.mat_idx ||
+        dot(q_n.n_v, q.n_v) < cos(angle_threshold)) {
+        return false;
+    }
+    return true;
+}
+
+vec3 resample_sbdpt_gi() {
+
+    const vec2 pixel = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+    const ReservoirSample s = samples.d[pixel_idx];
+
+    // if no first hit, then no continuation of eye path
+    if (s.mat_idx == -1) {
+        return vec3(0);
+    }
+
+    Reservoir r;
+    uint prev_coords_idx = pixel_idx;
+    ivec2 prev_coords;
+    bool reprojection_failed = true;
+    
+    if (pc_ray.do_spatiotemporal == 0) {
+        init_reservoir(r, s);
+    } else {
+        vec4 prev_pos = ubo.prev_view * vec4(s.x_v, 1.f);
+        prev_pos /= prev_pos.z;
+        prev_pos = -ubo.prev_projection * prev_pos;
+        const vec2 prev_ndc = prev_pos.xy;
+        prev_coords = ivec2(0.5f * (1.f + prev_ndc) * gl_LaunchSizeEXT.xy);
+
+        if (prev_coords.x >= 0 && prev_coords.x < gl_LaunchSizeEXT.x &&
+            prev_coords.y >= 0 && prev_coords.y < gl_LaunchSizeEXT.y) {
+            prev_coords_idx = prev_coords.x * gl_LaunchSizeEXT.y + prev_coords.y;
+            
+                reprojection_failed = false;
+        }
+
+        bool reprojection_failed = true;
+        uint prev_coords_idx;
+        if (prev_coords.x >= 0 && prev_coords.x < gl_LaunchSizeEXT.x &&
+            prev_coords.y >= 0 && prev_coords.y < gl_LaunchSizeEXT.y) {
+            
+            prev_coords_idx = prev_coords.x * gl_LaunchSizeEXT.y + prev_coords.y;
+            reprojection_failed = false;
+            
+        }
+        if (!reprojection_failed) {
+            Reservoir temp_reservoir = temp_reservoirs.d[ping_pong_offset + prev_coords_idx];
+            if (similar_projection(length(s.x_v - ubo.view_pos.xyz), length(temp_reservoir.s.x_v - ubo.prev_view_pos.xyz))) {
+                r = temp_reservoir;
+            } else {
+                init_reservoir(r, s);
+            }
+            
+        } else {
+            init_reservoir(r, s);
+        }
+    }
+
+
+    vec3 sample_connected = vec3(0);
+    float sample_tf = target_function(s.L_o, s.x_s, s.x_v, s.n_v, s.f, sample_connected);
+    float wi = sample_tf / s.p_q;
+   
+    vec3 temp_dir = normalize(r.s.x_s - s.x_v);
+    float adjusted_pdf;
+    vec3 f_adjusted = eval_bsdf(s.n_v, -temp_dir, load_material(s.mat_idx, s.uv_v), 0, false, temp_dir, adjusted_pdf, 0);
+    
+    float jacobian = 1.f;
+
+    vec3 connectB = r.s.x_s - r.s.x_v;
+    vec3 connectA = r.s.x_s - s.x_v;
+
+    float square_mag_B = dot(connectB, connectB);
+    float square_mag_A = dot(connectA, connectA);
+    connectB = normalize(connectB);
+    connectA = normalize(connectA);
+    float cosA = dot(s.n_v, connectA);
+    float cosB = dot(r.s.n_v, connectB);
+    float cosPhiA = -dot(connectA, r.s.n_s);
+    float cosPhiB = -dot(connectB, r.s.n_s);
+
+    if (cosA <= 0.f || cosPhiA <= 0.f || square_mag_A <= 0.f || square_mag_B <= 0.f || cosB <= 0.f || cosPhiB <= 0.f) {
+        jacobian = 0.f;
+    }
+    jacobian = (square_mag_A * cosPhiB) <= 0.f ? 0.f : square_mag_B * cosPhiA / (square_mag_A * cosPhiB);
+
+    vec3 temporal_connected = vec3(0);
+    float temporal_tf = target_function(r.s.L_o, r.s.x_s, s.x_v, s.n_v, f_adjusted, temporal_connected) * jacobian;
+    //float temporal_tf = target_function(r.s.L_o, r.s.x_s, s.x_v, s.n_v, s.f, temporal_connected) * jacobian;
+
+    float w_sum = temporal_tf * r.W * r.m;
+
+    bool updated = update_reservoir(r, w_sum, s, wi);
+
+    w_sum /= r.m;
+    r.m = min(r.m, M_MAX);
+    float current_tf = updated ? sample_tf : temporal_tf;
+    vec3 current_sample = updated ? sample_connected : temporal_connected;
+    //vec3 current_sample = vec3(0);
+    //float current_tf = target_function(r.s.L_o, r.s.x_s, s.x_v, s.n_v, s.f, current_sample);
+
+    r.W = current_tf <= 0.f ? 0.f : w_sum / current_tf;
+    temp_reservoirs.d[pixel_idx + pixels - ping_pong_offset] = r;
+
+    //return sample_connected/ s.p_q;
+    return current_sample * r.W;
+    //return vec3(test);
+}
+
+
+//#define tr temp_reservoirs.d[current_pingpong_offset + pixel_idx]
+//#define tr temp_reservoirs.d[0 + pixel_idx]
+void main() {
+    
+
+    vec3 col = resample_sbdpt_gi();
+    //col = vec3(col.x, 0, 0);
+    //vec3 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+    
+    /*if (pc_ray.frame_num > 1) {
+        float w = 1. / float(pc_ray.frame_num);
+        vec3 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy),
+                   vec4(mix(old_col, col, w), 1.f));
+    } else {
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+    }*/
+
+
+    
+}
