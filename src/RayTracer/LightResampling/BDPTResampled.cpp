@@ -39,7 +39,7 @@ void BDPTResampled::init() {
 	desc.light_path_addr = light_path_buffer.get_device_address();
 	desc.camera_path_addr = camera_path_buffer.get_device_address();
 	desc.color_storage_addr = color_storage_buffer.get_device_address();
-	desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
+	//desc.global_light_reservoirs_addr = global_light_reservoir_buffer.get_device_address();
 
 	scene_desc_buffer.create(
 		&instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,

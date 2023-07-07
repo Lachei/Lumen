@@ -117,9 +117,9 @@ void SBDPTResampled::init() {
 
 void SBDPTResampled::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-	pc_ray.light_pos = scene_ubo.light_pos;
-	pc_ray.light_type = 0;
-	pc_ray.light_intensity = 10;
+	//pc_ray.light_pos = scene_ubo.light_pos;
+	//pc_ray.light_type = 0;
+	//pc_ray.light_intensity = 10;
 	pc_ray.num_lights = (int)lights.size();
 	pc_ray.time = rand() % UINT_MAX;
 	pc_ray.max_depth = lumen_scene->config.path_length;
@@ -127,26 +127,13 @@ void SBDPTResampled::render() {
 	pc_ray.total_light_area = total_light_area;
 	// TODO fix triangle light and total light distinction
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
-	pc_ray.use_vc = true;  // use_vc;
-	pc_ray.num_textures = lumen_scene->textures.size()+1;
+	//pc_ray.use_vc = true;  // use_vc;
+	//pc_ray.num_textures = lumen_scene->textures.size()+1;
 	pc_ray.do_spatiotemporal = do_spatiotemporal;
 	pc_ray.random_num = rand() % UINT_MAX;
 
-	/* auto& prepare_pass =
-		instance->vkb.rg
-			->add_compute("Init Reservoirs",
-						  {.shader = Shader("src/shaders/integrators/sbdpt/init_spawn_reservoirs.comp"),
-						   .dims = {(uint32_t)std::ceil(instance->width * instance->height / float(1024.0f)), 1, 1}})
-			.push_constants(&pc_ray)
-			.bind(scene_desc_buffer);
-
-	if (!do_spatiotemporal) {
-		prepare_pass.zero(temporal_light_origin_reservoirs);
-	} else {
-		prepare_pass.skip_execution();
-	}*/
-//#define TEMP_RESAMPLING
-//#define SPATIAL_RESAMPLING
+#define TEMP_RESAMPLING
+#define SPATIAL_RESAMPLING
 #define LIGHT_PATH_RESAMPLING
 #define GI_RESAMPLING
 #ifdef TEMP_RESAMPLING
@@ -165,14 +152,14 @@ void SBDPTResampled::render() {
 		.push_constants(&pc_ray)
 		//.zero(temporal_light_origin_reservoirs, !do_spatiotemporal)
 		//.zero(light_vertices_buffer)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			prim_lookup_buffer,
 			scene_ubo_buffer,
 			scene_desc_buffer,
 		})
 		.bind(mesh_lights_buffer)
-		.bind_texture_array(diffuse_textures)
+		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 #endif
 #ifdef SPATIAL_RESAMPLING
@@ -191,14 +178,14 @@ void SBDPTResampled::render() {
 		.push_constants(&pc_ray)
 		//.zero(temporal_light_origin_reservoirs, !do_spatiotemporal)
 		//.zero(light_vertices_buffer)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			prim_lookup_buffer,
 			scene_ubo_buffer,
 			scene_desc_buffer,
 		})
 		.bind(mesh_lights_buffer)
-		.bind_texture_array(diffuse_textures)
+		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 #endif
 	  instance->vkb.rg
@@ -216,14 +203,14 @@ void SBDPTResampled::render() {
 		.push_constants(&pc_ray)
 		//.zero(temporal_light_origin_reservoirs, !do_spatiotemporal)
 		//.zero(light_vertices_buffer)
-		.bind({
+		.bind(std::initializer_list<ResourceBinding>{
 			output_tex,
 			prim_lookup_buffer,
 			scene_ubo_buffer,
 			scene_desc_buffer,
 		})
 		.bind(mesh_lights_buffer)
-		.bind_texture_array(diffuse_textures)
+		.bind_texture_array(scene_textures)
 		.bind_tlas(instance->vkb.tlas);
 
 	   instance->vkb.rg
@@ -235,7 +222,7 @@ void SBDPTResampled::render() {
 										  .dims = {instance->width, instance->height},
 										  .accel = instance->vkb.tlas.accel})
 		   .push_constants(&pc_ray)
-		   .bind({
+		   .bind(std::initializer_list<ResourceBinding>{
 			   output_tex,
 			   prim_lookup_buffer,
 			   scene_ubo_buffer,
@@ -243,7 +230,7 @@ void SBDPTResampled::render() {
 		   })
 		   //.bind_texture_array(diffuse_textures)
 		   .bind(mesh_lights_buffer)
-		   .bind_texture_array(diffuse_textures)
+		   .bind_texture_array(scene_textures)
 		   .bind_tlas(instance->vkb.tlas);
 
 #ifdef LIGHT_PATH_RESAMPLING
@@ -262,60 +249,16 @@ void SBDPTResampled::render() {
 		  .push_constants(&pc_ray)
 		  //.zero(temporal_light_origin_reservoirs, !do_spatiotemporal)
 		  //.zero(light_vertices_buffer)
-		  .bind({
+		  .bind(std::initializer_list<ResourceBinding>{
 			  output_tex,
 			  prim_lookup_buffer,
 			  scene_ubo_buffer,
 			  scene_desc_buffer,
 		  })
 		  .bind(mesh_lights_buffer)
-		  .bind_texture_array(diffuse_textures)
+		  .bind_texture_array(scene_textures)
 		  .bind_tlas(instance->vkb.tlas);
-	   /* instance->vkb.rg
-		  ->add_rt("SBDPT - Light Path Resampling Spatial",
-				   {
-
-					   .shaders = {{"src/shaders/integrators/sbdpt/sbdpt_light_path_resample_spatial.rgen"},
-								   {"src/shaders/ray.rmiss"},
-								   {"src/shaders/ray_shadow.rmiss"},
-								   {"src/shaders/ray.rchit"},
-								   {"src/shaders/ray.rahit"}},
-					   .dims = {instance->width, instance->height},
-					   .accel = instance->vkb.tlas.accel})
-
-		  .push_constants(&pc_ray)
-		  //.zero(temporal_light_origin_reservoirs, !do_spatiotemporal)
-		  //.zero(light_vertices_buffer)
-		  .bind({
-			  output_tex,
-			  prim_lookup_buffer,
-			  scene_ubo_buffer,
-			  scene_desc_buffer,
-		  })
-		  .bind(mesh_lights_buffer)
-		  .bind_texture_array(diffuse_textures)
-		  .bind_tlas(instance->vkb.tlas);*/
 #endif
-	//.finalize();
-	  /* instance->vkb.rg
-		->add_rt("SBDPT - Trace Eye", {.shaders = {{"src/shaders/integrators/sbdpt/sbdpt_eye.rgen"},
-												 {"src/shaders/ray.rmiss"},
-												 {"src/shaders/ray_shadow.rmiss"},
-												 {"src/shaders/ray.rchit"},
-												 {"src/shaders/ray.rahit"}},
-									 .dims = {instance->width, instance->height},
-									 .accel = instance->vkb.tlas.accel})
-		.push_constants(&pc_ray)
-		.bind({
-			output_tex,
-			prim_lookup_buffer,
-			scene_ubo_buffer,
-			scene_desc_buffer,
-		})
-		//.bind_texture_array(diffuse_textures)
-		.bind(mesh_lights_buffer)
-		.bind_texture_array(diffuse_textures)
-		.bind_tlas(instance->vkb.tlas);*/
 
 #ifdef GI_RESAMPLING
 	  instance->vkb.rg
@@ -327,7 +270,7 @@ void SBDPTResampled::render() {
 										 .dims = {instance->width, instance->height},
 										 .accel = instance->vkb.tlas.accel})
 		  .push_constants(&pc_ray)
-		  .bind({
+		  .bind(std::initializer_list<ResourceBinding>{
 			  output_tex,
 			  prim_lookup_buffer,
 			  scene_ubo_buffer,
@@ -335,7 +278,7 @@ void SBDPTResampled::render() {
 		  })
 		  //.bind_texture_array(diffuse_textures)
 		  .bind(mesh_lights_buffer)
-		  .bind_texture_array(diffuse_textures)
+		  .bind_texture_array(scene_textures)
 		  .bind_tlas(instance->vkb.tlas);
 		instance->vkb.rg
 		  ->add_rt("SBDPT - GI Spatial Resampling", {.shaders = {{"src/shaders/integrators/sbdpt/sbdpt_gi_spatial_reuse.rgen"},
@@ -346,7 +289,7 @@ void SBDPTResampled::render() {
 											 .dims = {instance->width, instance->height},
 											 .accel = instance->vkb.tlas.accel})
 		  .push_constants(&pc_ray)
-		  .bind({
+		  .bind(std::initializer_list<ResourceBinding>{
 			  output_tex,
 			  prim_lookup_buffer,
 			  scene_ubo_buffer,
@@ -354,7 +297,7 @@ void SBDPTResampled::render() {
 		  })
 		  //.bind_texture_array(diffuse_textures)
 		  .bind(mesh_lights_buffer)
-		  .bind_texture_array(diffuse_textures)
+		  .bind_texture_array(scene_textures)
 		  .bind_tlas(instance->vkb.tlas);
 
 #endif
