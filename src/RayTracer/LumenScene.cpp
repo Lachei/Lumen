@@ -270,22 +270,31 @@ void LumenScene::load_scene(const std::string& path) {
 		config.cam_settings.dir = {d[0], d[1], d[2]};
 		compute_scene_dimensions();
 		for (auto& light : lights_arr) {
-			const auto& pos = light["pos"];
-			const auto& dir = light["dir"];
-			const auto& L = light["L"];
-			lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
-			lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
-			lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
-			if (light["type"] == "spot") {
-				lights[light_idx].light_flags |= LIGHT_SPOT;
-				// Is finite
-				lights[light_idx].light_flags |= 1 << 4;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
-			} else if (light["type"] == "directional") {
-				lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
-				// Is delta
-				lights[light_idx].light_flags |= 1 << 5;
+			if (light["type"] == "environment") {
+				textures.push_back(light["filepath"]);
+				env_tex_idx = static_cast<uint32_t>(textures.size() - 1);
+				lights[light_idx].light_flags |= LIGHT_ENVIRONMENT;
+				lights[light_idx].light_flags |= LIGHT_DELTA;
+				lights[light_idx].pos.x = env_tex_idx;
+			}
+			else {
+				const auto& pos = light["pos"];
+				const auto& dir = light["dir"];
+				const auto& L = light["L"];
+				lights[light_idx].pos = glm::vec3({pos[0], pos[1], pos[2]});
+				lights[light_idx].to = glm::vec3({dir[0], dir[1], dir[2]});
+				lights[light_idx].L = glm::vec3({L[0], L[1], L[2]});
+				if (light["type"] == "spot") {
+					lights[light_idx].light_flags |= LIGHT_SPOT;
+					// Is finite
+					lights[light_idx].light_flags |= LIGHT_FINITE;
+					// Is delta
+					lights[light_idx].light_flags |= LIGHT_DELTA;
+				} else if (light["type"] == "directional") {
+					lights[light_idx].light_flags |= LIGHT_DIRECTIONAL;
+					// Is delta
+					lights[light_idx].light_flags |= LIGHT_DELTA;
+				}
 			}
 			light_idx++;
 		}

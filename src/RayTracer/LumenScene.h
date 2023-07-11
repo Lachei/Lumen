@@ -54,6 +54,7 @@ class LumenScene {
 	SceneConfig config;
 
 	uint32_t dir_light_idx = -1;
+	uint32_t env_tex_idx;
 
    private:
 	void compute_scene_dimensions();
