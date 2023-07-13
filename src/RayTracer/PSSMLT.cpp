@@ -186,7 +186,7 @@ void PSSMLT::init() {
 
 	mutation_count =
 		int(instance->width * instance->height * mutations_per_pixel / float(num_mlt_threads));
-	pc_ray.mutations_per_pixel = mutations_per_pixel;
+	pc_ray.mutations_per_pixel = static_cast<float>(mutations_per_pixel);
 }
 
 void PSSMLT::render() {

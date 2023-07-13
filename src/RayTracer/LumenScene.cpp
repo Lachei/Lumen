@@ -275,7 +275,7 @@ void LumenScene::load_scene(const std::string& path) {
 				env_tex_idx = static_cast<uint32_t>(textures.size() - 1);
 				lights[light_idx].light_flags |= LIGHT_ENVIRONMENT;
 				lights[light_idx].light_flags |= LIGHT_DELTA;
-				lights[light_idx].pos.x = env_tex_idx;
+				lights[light_idx].pos.x = static_cast<int>(env_tex_idx);
 			}
 			else {
 				const auto& pos = light["pos"];
