@@ -43,7 +43,8 @@ void main(){
     if(clamped != p.xyz)
         return;
 
-    ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
+    p.xyz = p.xyz * .5 + .5;
+    ivec2 pixel_pos = ivec2(p.xy * vec2(pc.size_x, pc.size_y) + .5f);
 
     uint lin_pos = pixel_pos.x + pixel_pos.y * pc.size_x;
 
