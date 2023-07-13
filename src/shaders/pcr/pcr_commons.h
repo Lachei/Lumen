@@ -195,10 +195,10 @@ INLINE uint calc_bit_offset(INOUT_OCCUPANCY entry, vec3 base_pos, vec3 p, float 
     BIT_CALCS(base_pos, p, d);
     
     uint bit_index = 0;
-    for(uint cur_block = 0; cur_block < lin_block; ++cur_block)
+    for(uint cur_block = 0; cur_block < uint(lin_block); ++cur_block)
         for(uint cur_bank = 0; cur_bank < 2; ++cur_bank)
             bit_index += bit_count(entry.occupancy[cur_block][cur_bank]);
-    for(uint cur_bank = 0; cur_bank < bank; ++cur_bank)
+    for(uint cur_bank = 0; cur_bank < uint(bank); ++cur_bank)
         bit_index += bit_count(entry.occupancy[lin_block][cur_bank]);
     bit_index += bit_count(entry.occupancy[lin_block][bank] & ((1 << bit) - 1));
     return bit_index;

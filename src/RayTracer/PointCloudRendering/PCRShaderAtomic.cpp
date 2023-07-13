@@ -5,6 +5,8 @@
 
 #define PRINT_FRAME_TIME
 
+constexpr bool render_splats = true;
+
 void PCRShaderAtomic::init() {
 	// Loading the point cload data
 	if(!config.count("point_cloud"))
@@ -59,9 +61,15 @@ void PCRShaderAtomic::init() {
 void PCRShaderAtomic::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	pc.cam_matrix = camera->projection * camera->view;
+	pc.cam_view_inv = glm::inverse(camera->view);
+	std::vector<ShaderMacro> macros;
+	if (render_splats)
+		macros.emplace_back("RENDER_SPLATS");
+
 	instance->vkb.rg
 		->add_compute("Render Points",
 					 {.shader = Shader("src/shaders/pcr/pcr_shader_atomic.comp"),
+					  .macros = macros,
 					  .dims = {(uint32_t)std::ceil(point_count / float(shader_atomic_size_x)), 1, 1}})
 		.zero(image_depth_buffer)
 		.push_constants(&pc);

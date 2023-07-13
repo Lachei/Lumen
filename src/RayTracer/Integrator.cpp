@@ -14,7 +14,7 @@ void Integrator::init() {
 
 	if (lumen_scene->config.cam_settings.pos != vec3(0)) {
 		camera = std::unique_ptr<PerspectiveCamera>(new PerspectiveCamera(
-			lumen_scene->config.cam_settings.fov, 0.00001f, 100.0f, (float)instance->width / instance->height,
+			lumen_scene->config.cam_settings.fov, 0.01f, 100.0f, (float)instance->width / instance->height,
 			lumen_scene->config.cam_settings.dir, lumen_scene->config.cam_settings.pos));
 	} else {
 		// Assume the camera matrix is given
