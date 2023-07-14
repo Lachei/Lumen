@@ -341,6 +341,9 @@ vec3 sample_light_Li(const vec4 rands_pos, const vec3 p, const int num_lights,
         n = -wi;
         pos = light_p;
     } break;
+    case LIGHT_ENVIRONMENT: {
+        
+    }
     default:
         break;
     }
