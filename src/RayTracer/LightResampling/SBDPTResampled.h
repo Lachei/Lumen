@@ -9,7 +9,7 @@ class SBDPTResampled : public Integrator {
 	virtual void destroy() override;
 
    private:
-	PCReSTIRGI  pc_ray{};
+	PCReSTIRGI pc_ray{};
 	VkDescriptorPool desc_pool;
 	VkDescriptorSetLayout desc_set_layout;
 	VkDescriptorSet desc_set;

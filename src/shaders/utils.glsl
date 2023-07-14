@@ -383,4 +383,10 @@ float erf_inv(float x) {
     return p * x;
 }
 
+vec2 to_spherical(const vec3 cart){
+    float theta = acos(cart.y);
+    float phi = atan(cart.z, cart.x);
+    return vec2(phi / PI2, theta / PI);
+}
+
 #endif
