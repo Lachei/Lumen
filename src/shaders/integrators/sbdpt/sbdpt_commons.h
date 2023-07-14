@@ -17,6 +17,46 @@ using uint = unsigned int;
 #define ALIGN16
 #endif
 
+struct LightTransferState {
+    vec3 wi;
+    vec3 n_s;
+    vec3 pos;
+    vec2 uv;
+    vec3 throughput;
+    uint material_idx;
+    float area;
+    float d_vcm;
+    float d_vc;
+    float d_vm;
+};
+
+struct LightPathReservoir {
+    // TODO hardcoded array size change to depth needed
+    // TODO is in bdpt path length 6 3 cam/3 light vertices or 6/6 ?
+    vec3 cam_hit_pos;
+    uint M;
+    vec3 cam_hit_normal;
+    float W;
+    //reservoir samples are in extra buffer
+    uint path_vertex_count;
+};
+
+// Temporary unoptimized TODO change into firsthit data
+struct LightSpawnSample {
+	vec3 wi;
+    vec3 pos;
+    vec3 throughput;
+    // light sample firsthit connection radiance to camera firsthit
+    vec3 L_o;
+    float mis_weight;
+	float pdf_pos;
+	float pdf_dir;
+	float pdf_emit;
+    float pdf_direct;
+    float cos_theta;
+    uint light_record_flags;
+};
+
 struct LightHitSample {
     // wo = -wi
     vec3 L_connect;
@@ -42,6 +82,13 @@ struct LightHitSample {
     // side not needed, sample is always on diffuse surface
 };
 
+struct LightSpawnReservoir {
+	uint M;
+	float W;
+	float w_sum;
+    LightSpawnSample light_spawn_sample;
+};
+
 struct LightHitReservoir {
     LightHitSample light_hit_sample;
     //vec3 prev_cam_hit_pos;
@@ -51,27 +98,4 @@ struct LightHitReservoir {
 	//float w_sum;
 };
 
-struct LightTransferState {
-    vec3 wi;
-    vec3 n_s;
-    vec3 pos;
-    vec2 uv;
-    vec3 throughput;
-    uint material_idx;
-    float area;
-    float d_vcm;
-    float d_vc;
-    float d_vm;
-};
-
-struct LightPathReservoir {
-    // TODO hardcoded array size change to depth needed
-    // TODO is in bdpt path length 6 3 cam/3 light vertices or 6/6 ?
-    vec3 cam_hit_pos;
-    uint M;
-    vec3 cam_hit_normal;
-    float W;
-    //reservoir samples are in extra buffer
-    uint path_vertex_count;
-};
 #endif // define SBDPT_COMMONS

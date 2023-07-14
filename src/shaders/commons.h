@@ -634,63 +634,6 @@ struct AvgStruct {
 	uint prev;
 };
 
-// Temporary unoptimized TODO change into firsthit data
-struct LightSpawnSample {
-	vec3 wi;
-    vec3 pos;
-    vec3 throughput;
-    // light sample firsthit connection radiance to camera firsthit
-    vec3 L_o;
-    float mis_weight;
-	float pdf_pos;
-	float pdf_dir;
-	float pdf_emit;
-    float pdf_direct;
-    float cos_theta;
-    uint light_record_flags;
-};
-
-struct LightHitSample {
-    // wo = -wi
-    vec3 L_connect;
-    float d_vcm;
-    vec3 wi;
-    float d_vc;
-    vec3 n_s;
-    float d_vm;
-    vec3 n_g;
-    float area;
-    vec3 light_hit_pos;  
-    float mis_weight;
-    vec3 throughput;
-    float light_pdf_fwd;
-    vec2 uv; // for material
-    float light_pdf_rev;
-    float cam_pdf_fwd;
-    vec3 cam_hit_pos;
-    float cam_pdf_rev;
-    vec3 cam_hit_normal;
-    float sampling_pdf_emit;
-    uint material_idx;
-    // side not needed, sample is always on diffuse surface
-};
-
-struct LightSpawnReservoir {
-	uint M;
-	float W;
-	float w_sum;
-    LightSpawnSample light_spawn_sample;
-};
-
-struct LightHitReservoir {
-    LightHitSample light_hit_sample;
-    //vec3 prev_cam_hit_pos;
-    uint M;
-	float W;
-    float test;
-	//float w_sum;
-};
-
 // Scene buffer addresses
 struct SceneDesc {
 	uint64_t vertex_addr;
