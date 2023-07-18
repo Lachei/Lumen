@@ -37,6 +37,7 @@ void main() {
                                                2. / gl_LaunchSizeEXT.y, 0, 1));
     area_int /= (area_int.w);
     const float cam_area = abs(area_int.x * area_int.y);
+    float first_hit_depth = 1.f/0;
     bool specular = false;
     vec3 throughput = vec3(1);
     for (int depth = 0;; depth++) {
@@ -50,6 +51,8 @@ void main() {
             col += throughput * shade_atmosphere(pc_ray.dir_light_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
             break;
         }
+        if(depth == 0)
+            first_hit_depth = distance(payload.pos.xyz, origin.xyz);
         const Material hit_mat =
             load_material(payload.material_idx, payload.uv);
         if (depth == 0 || specular) {
@@ -98,16 +101,30 @@ void main() {
     if (isnan(luminance(col))) {
         return;
     }
+    
+    vec4 storage = vec4(1);
+    #ifdef FILM_COMP_B
+    storage.b = col.b;
+    #endif
+    #ifdef FILM_COMP_G
+    storage.g = col.g;
+    #endif
+    #ifdef FILM_COMP_R
+    storage.r = col.r;
+    #endif
+    #ifdef FILM_COMP_D
+    storage.w = first_hit_depth;
+    #endif
 
     if (pc_ray.frame_num > 0) {
 
         float w = 1. / float(pc_ray.frame_num + 1);
-        vec3 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy)).xyz;
+        vec4 old_col = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
         // imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
         imageStore(image, ivec2(gl_LaunchIDEXT.xy),
-                   vec4(mix(old_col, col, w), 1.f));
+                   mix(old_col, storage, w));
     } else {
 
-        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(col, 1.f));
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), storage);
     }
 }

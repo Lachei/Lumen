@@ -91,6 +91,7 @@ void LumenScene::load_scene(const std::string& path) {
 		i >> j;
 
 		integrator_config = j["integrator"];
+		film_config = j.value("film", nlohmann::json::object({{"components", "BGR"}}));// tries to get the film component, stets to standard rgb rendering if nothing was specified
 
 		config.integrator_name = integrator_config["type"];
 		if (!integrator_config["path_length"].is_null()) {

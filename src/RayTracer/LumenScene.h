@@ -51,6 +51,7 @@ class LumenScene {
 		float radius{0};
 	} m_dimensions;
 	nlohmann::json integrator_config;
+	nlohmann::json film_config;
 	SceneConfig config;
 
 	uint32_t dir_light_idx = -1;

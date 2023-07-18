@@ -31,12 +31,17 @@ void Path::render() {
 	pc_ray.total_light_area = total_light_area;
 	pc_ray.light_triangle_count = total_light_triangle_cnt;
 	pc_ray.dir_light_idx = lumen_scene->dir_light_idx;
+	
+	std::vector<ShaderMacro> macros;
+	for(char c: film_config["components"].get<std::string>())
+		macros.emplace_back("FILM_COMP_" + std::string(1, char(std::toupper(c))));
 	instance->vkb.rg
 		->add_rt("Path", {.shaders = {{"src/shaders/integrators/path/path.rgen"},
 									  {"src/shaders/ray.rmiss"},
 									  {"src/shaders/ray_shadow.rmiss"},
 									  {"src/shaders/ray.rchit"},
 									  {"src/shaders/ray.rahit"}},
+						  .macros = std::move(macros),
 						  .dims = {instance->width, instance->height},
 						  .accel = instance->vkb.tlas.accel})
 		.push_constants(&pc_ray)

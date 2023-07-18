@@ -329,7 +329,7 @@ float RayTracer::draw_frame() {
 
 	if (write_exr) {
 		write_exr = false;
-		save_exr((float*)output_img_buffer_cpu.data, instance->width, instance->height, "out.exr");
+		save_exr((float*)output_img_buffer_cpu.data, scene.film_config["components"], instance->width, instance->height, "out.exr");
 	}
 	bool time_limit = (abs(diff / CLOCKS_PER_SEC - 5)) < 0.1;
 	calc_rmse = time_limit;
