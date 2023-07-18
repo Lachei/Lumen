@@ -704,7 +704,6 @@ struct SceneDesc {
 	uint64_t should_resample_addr;
 	uint64_t light_state_addr;
 	uint64_t angle_struct_addr;
-	uint64_t avg_addr;
 
 	// DDGI
 	uint64_t probe_radiance_addr;
@@ -719,6 +718,7 @@ struct SceneDesc {
 	uint64_t spatial_light_origin_reservoirs_addr;
 	uint64_t light_vertices_reservoirs_addr;
 	uint64_t light_path_reservoirs_addr;
+	uint64_t avg_addr;
 };
 
 struct Desc2 {

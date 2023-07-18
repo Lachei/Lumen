@@ -10,6 +10,7 @@
 
 #include "../../commons.glsl"
 #include "sbdpt_commons.h"
+#include "sbdpt_commons.glsl"
 layout(push_constant) uniform _PushConstantRay { PCReSTIRGI pc_ray; };
 
 layout(buffer_reference, scalar) buffer LightStates { LightState d[]; };
@@ -42,7 +43,6 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
 uint vcm_light_path_idx =
     (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y) *
     (pc_ray.max_depth + 1);
-#include "../sbdpt_commons.glsl"
 
 #define SPATIAL_RESAMPLING
 ////////////////////////
@@ -581,7 +581,7 @@ vec3 fill_light_with_lighthit_resampling(vec3 origin, inout VCMState vcm_state, 
 #define light_vtx(i) vcm_lights.d[vcm_light_path_idx + i]
     const vec3 cam_pos = origin;
     const vec3 cam_nrm = vec3(-ubo.inv_view * vec4(0, 0, 1, 0));
-    const float radius = pc_ray.radius;
+    const float radius = pc_ray.world_radius;
     const float radius_sqr = radius * radius;
     vec4 area_int = (ubo.inv_projection * vec4(2. / gl_LaunchSizeEXT.x,
                                                2. / gl_LaunchSizeEXT.y, 0, 1));
@@ -821,11 +821,11 @@ void main() {
     camera_state.d_vm = 0;
 
 #define light_vtx(i) vcm_lights.d[vcm_light_path_idx + i]
-    const float radius = pc_ray.radius;
+    const float radius = pc_ray.world_radius;
     const float radius_sqr = radius * radius;
     float eta_vcm = PI * radius_sqr * screen_size;
-    float eta_vc = (pc_ray.use_vc == 1) ? 1.0 / eta_vcm : 0;
-    float eta_vm = (pc_ray.use_vm == 1) ? PI * radius_sqr * screen_size : 0;
+    float eta_vc = 0//(pc_ray.use_vc == 1) ? 1.0 / eta_vcm : 0;
+    float eta_vm = 0//(pc_ray.use_vm == 1) ? PI * radius_sqr * screen_size : 0;
     bool specular = false;
     bool result;
     bool finite;
