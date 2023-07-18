@@ -141,12 +141,39 @@ void RayTracer::update() {
 }
 
 void RayTracer::render(uint32_t i) {
+	auto string_list_contains = [](std::string_view list, int page){
+		auto remove_whitespace = [](std::string_view s){
+			auto start = s.find_first_not_of(" ");
+			auto end = s.find_last_not_of(" ");
+			return s.substr(start, end - start + 1);
+		};
+		for(auto r: std::views::split(list, ",")){
+			std::string_view rr(r.data(), r.size());
+			rr = remove_whitespace(rr);
+			if(rr == std::to_string(page))
+				return true;
+			if(rr.find('-') != std::string_view::npos){
+				std::stringstream begin(std::string(rr.data(), rr.data() + rr.find('-')));
+				std::stringstream end(std::string(rr.data() + rr.find('-') + 1, rr.data() + rr.size()));
+				int b,e;
+				begin >> b; end >> e;
+				if(b > e)
+					std::swap(b, e);
+				if( page >= b && page <= e )
+					return true;
+			}
+		}
+		return false;
+	};
+	
 	integrator->render();
 	post_fx.render(integrator->output_tex, vkb.swapchain_images[i]);
 	auto cmdbuf = vkb.ctx.command_buffers[i];
 	VkCommandBufferBeginInfo begin_info = vk::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	vk::check(vkBeginCommandBuffer(cmdbuf, &begin_info));
 
+	write_exr |= scene.integrator_config.count("export_images") ? string_list_contains(scene.integrator_config["export_images"].get<std::string>(), cnt): false;
+		
 	if (write_exr) {
 		instance->vkb.rg->current_pass().copy(integrator->output_tex, output_img_buffer_cpu);
 	}
@@ -328,8 +355,28 @@ float RayTracer::draw_frame() {
 	auto diff = ((float)now - start);
 
 	if (write_exr) {
+		// creating the output name of the result file
+		std::string output_name{"out.exr"};
+		if(scene.integrator_config.count("export_images_format")){
+			char output[200];
+			snprintf(output, sizeof(output), scene.integrator_config["export_images_format"].get<std::string>().c_str(), cnt);
+			output_name = output;
+		}
+
+		// check if folder exists, if not create
+		auto path = std::filesystem::path(output_name).remove_filename();
+		if(!path.empty() && !std::filesystem::exists(path))
+			std::filesystem::create_directory(path);
+			
 		write_exr = false;
-		save_exr((float*)output_img_buffer_cpu.data, scene.film_config["components"], instance->width, instance->height, "out.exr");
+		save_exr((float*)output_img_buffer_cpu.data, scene.film_config["components"], instance->width, instance->height, output_name.c_str());
+		// matrices are exported in column major style
+		json matrices;
+		matrices["view_matrix"] = std::vector<float>(&integrator->camera->view[0][0], &integrator->camera->view[3][3]);
+		matrices["projection_matrix"] = std::vector<float>(&integrator->camera->projection[0][0], &integrator->camera->projection[3][3]);
+		std::string matrix_name =  output_name.substr(0, output_name.find_last_of(".")) + ".json";		
+		std::ofstream matrix_file(matrix_name, std::ios_base::binary);
+		matrix_file << matrices.dump();
 	}
 	bool time_limit = (abs(diff / CLOCKS_PER_SEC - 5)) < 0.1;
 	calc_rmse = time_limit;
