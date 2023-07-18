@@ -21,6 +21,7 @@ class Integrator {
 	virtual bool gui();
 	virtual bool update();
 	virtual void destroy();
+	void update_camera();
 	Texture2D output_tex;
 	std::unique_ptr<Camera> camera = nullptr;
 	bool updated = false;
@@ -46,6 +47,7 @@ class Integrator {
 	uint32_t total_light_triangle_cnt = 0;
 	float total_light_area = 0;
 	LumenScene* lumen_scene;
+	std::chrono::system_clock::time_point _last_frame_clock;
 
    private:
 	void create_blas();

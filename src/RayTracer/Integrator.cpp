@@ -14,13 +14,13 @@ void Integrator::init() {
 
 	if (lumen_scene->config.cam_settings.pos != vec3(0)) {
 		camera = std::unique_ptr<PerspectiveCamera>(new PerspectiveCamera(
-			lumen_scene->config.cam_settings.fov, 0.01f, 1000.0f, (float)instance->width / instance->height,
+			lumen_scene->config.cam_settings.fov, 0.01f, 100.0f, (float)instance->width / instance->height,
 			lumen_scene->config.cam_settings.dir, lumen_scene->config.cam_settings.pos));
 	} else {
 		// Assume the camera matrix is given
 		camera = std::unique_ptr<PerspectiveCamera>(
 			new PerspectiveCamera(lumen_scene->config.cam_settings.fov, lumen_scene->config.cam_settings.cam_matrix,
-								  0.01f, 1000.0f, (float)instance->width / instance->height));
+								  0.00001f, 100.0f, (float)instance->width / instance->height));
 	}
 
 	Camera* cam_ptr = camera.get();
@@ -100,39 +100,42 @@ void Integrator::init() {
 							VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 							VK_SHARING_MODE_EXCLUSIVE, sizeof(SceneUBO));
 	update_uniform_buffers();
+	
+	// only create scene buffers if geometry is available
+	if(vertex_buf_size){
+		vertex_buffer.create("Vertex Buffer", &instance->vkb.ctx,
+							 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+								 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+								 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, vertex_buf_size,
+							 lumen_scene->positions.data(), true);
+		index_buffer.create("Index Buffer", &instance->vkb.ctx,
+							VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+								VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+								VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+							VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, idx_buf_size,
+							lumen_scene->indices.data(), true);
 
-	vertex_buffer.create("Vertex Buffer", &instance->vkb.ctx,
-						 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-							 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-							 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-						 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, vertex_buf_size,
-						 lumen_scene->positions.data(), true);
-	index_buffer.create("Index Buffer", &instance->vkb.ctx,
-						VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-							VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-							VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-						VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, idx_buf_size,
-						lumen_scene->indices.data(), true);
-
-	normal_buffer.create("Normal Buffer", &instance->vkb.ctx,
+		normal_buffer.create("Normal Buffer", &instance->vkb.ctx,
+							 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+								 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+							 lumen_scene->normals.size() * sizeof(lumen_scene->normals[0]), lumen_scene->normals.data(),
+							 true);
+		uv_buffer.create("UV Buffer", &instance->vkb.ctx,
 						 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
 							 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 						 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-						 lumen_scene->normals.size() * sizeof(lumen_scene->normals[0]), lumen_scene->normals.data(),
-						 true);
-	uv_buffer.create("UV Buffer", &instance->vkb.ctx,
-					 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-						 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-					 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-					 lumen_scene->texcoords0.size() * sizeof(glm::vec2), lumen_scene->texcoords0.data(), true);
-	materials_buffer.create("Materials Buffer", &instance->vkb.ctx,
-							VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-							VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							lumen_scene->materials.size() * sizeof(Material), lumen_scene->materials.data(), true);
-	prim_lookup_buffer.create("Prim Lookup Buffer", &instance->vkb.ctx,
-							  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-							  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-							  prim_lookup.size() * sizeof(PrimMeshInfo), prim_lookup.data(), true);
+						 lumen_scene->texcoords0.size() * sizeof(glm::vec2), lumen_scene->texcoords0.data(), true);
+		materials_buffer.create("Materials Buffer", &instance->vkb.ctx,
+								VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+								VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+								lumen_scene->materials.size() * sizeof(Material), lumen_scene->materials.data(), true);
+		prim_lookup_buffer.create("Prim Lookup Buffer", &instance->vkb.ctx,
+								  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+								  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+								  prim_lookup.size() * sizeof(PrimMeshInfo), prim_lookup.data(), true);
+	}
 
 	// Create a sampler for textures
 	VkSamplerCreateInfo sampler_ci = vk::sampler_create_info();
@@ -170,8 +173,10 @@ void Integrator::init() {
 		}
 	}
 	// Create BLAS and TLAS
-	create_blas();
-	create_tlas();
+	if(vertex_buf_size){
+		create_blas();
+		create_tlas();
+	}
 	// Create offscreen image for output
 	TextureSettings settings;
 	settings.usage_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -245,35 +250,28 @@ void Integrator::create_tlas() {
 	instance->vkb.build_tlas(tlas, VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
 }
 
-void Integrator::update_uniform_buffers() {
-	camera->update_view_matrix();
-	scene_ubo.view = camera->view;
-	scene_ubo.projection = camera->projection;
-	scene_ubo.view_pos = glm::vec4(camera->position, 1);
-	scene_ubo.inv_view = glm::inverse(camera->view);
-	scene_ubo.inv_projection = glm::inverse(camera->projection);
-	scene_ubo.model = glm::mat4(1.0);
-	scene_ubo.light_pos = glm::vec4(3.0f, 2.5f, 1.0f, 1.0f);
-	memcpy(scene_ubo_buffer.data, &scene_ubo, sizeof(scene_ubo));
-}
+void Integrator::update_camera() {
+	double delta_t = std::chrono::duration<double>(std::chrono::system_clock::now() - _last_frame_clock).count();
+	_last_frame_clock = std::chrono::system_clock::now();
 
-bool Integrator::update() {
-	float trans_speed = 0.01f;
+	const glm::vec3 up{0,1,0};
+	glm::vec3 translation{};
+	float trans_speed = static_cast<float>(std::min(10 * delta_t, 500.));
 	glm::vec3 front;
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_SHIFT)) {
 		trans_speed *= 4;
 	}
 
-	front.x = cos(glm::radians(camera->rotation.x)) * sin(glm::radians(camera->rotation.y));
-	front.y = sin(glm::radians(camera->rotation.x));
-	front.z = cos(glm::radians(camera->rotation.x)) * cos(glm::radians(camera->rotation.y));
+	front.x = cos(glm::radians(-camera->rotation.x)) * sin(glm::radians(camera->rotation.y));
+	front.y = sin(glm::radians(-camera->rotation.x));
+	front.z = cos(glm::radians(-camera->rotation.x)) * cos(glm::radians(camera->rotation.y));
 	front = glm::normalize(-front);
 	if (instance->window->is_key_held(KeyInput::KEY_W)) {
 		camera->position += front * trans_speed;
 		updated = true;
-	}
+	}	
 	if (instance->window->is_key_held(KeyInput::KEY_A)) {
-		camera->position -= glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * trans_speed;
+		camera->position -= glm::normalize(glm::cross(front, up)) * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_S)) {
@@ -281,19 +279,19 @@ bool Integrator::update() {
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_D)) {
-		camera->position += glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f))) * trans_speed;
+		camera->position += glm::normalize(glm::cross(front, up)) * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::SPACE) || instance->window->is_key_held(KeyInput::KEY_E)) {
 		// Right
-		auto right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
-		auto up = glm::cross(right, front);
+		//auto right = glm::normalize(glm::cross(front, up));
+		//auto up = glm::cross(right, front);
 		camera->position += up * trans_speed;
 		updated = true;
 	}
 	if (instance->window->is_key_held(KeyInput::KEY_LEFT_CONTROL) || instance->window->is_key_held(KeyInput::KEY_Q)) {
-		auto right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
-		auto up = glm::cross(right, front);
+		//auto right = glm::normalize(glm::cross(front, up));
+		//auto up = glm::cross(right, front);
 		camera->position -= up * trans_speed;
 		updated = true;
 	}
@@ -305,12 +303,26 @@ bool Integrator::update() {
 		scene_ubo.debug_click = 0;
 	}
 
-	bool result = false;
-	if (updated) {
-		result = true;
-		updated = false;
-	}
-	update_uniform_buffers();
+	if (updated) camera->update_view_matrix();
+}
+
+void Integrator::update_uniform_buffers() {
+	scene_ubo.view = camera->view;
+	scene_ubo.projection = camera->projection;
+	scene_ubo.view_pos = glm::vec4(camera->position, 1);
+	scene_ubo.inv_view = glm::inverse(camera->view);
+	scene_ubo.inv_projection = glm::inverse(camera->projection);
+	scene_ubo.model = glm::mat4(1.0);
+	scene_ubo.light_pos = glm::vec4(3.0f, 2.5f, 1.0f, 1.0f);
+	memcpy(scene_ubo_buffer.data, &scene_ubo, sizeof(scene_ubo));
+}
+
+bool Integrator::update() {
+	// sets update to true if the camera moved
+	update_camera();
+	if (updated) update_uniform_buffers();
+	bool result = updated;
+	updated = false;
 
 	return result;
 }
