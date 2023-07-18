@@ -9,6 +9,7 @@
 #extension GL_EXT_shader_atomic_float : require
 
 #include "../../commons.glsl"
+#include "sbdpt_commons.h"
 layout(push_constant) uniform _PushConstantRay { PCReSTIRGI pc_ray; };
 // VCM buffers
 

@@ -9,6 +9,7 @@
 #extension GL_EXT_shader_atomic_float : require
 
 #include "../../commons.glsl"
+#include "sbdpt_commons.h"
 layout(push_constant) uniform _PushConstantRay { PCReSTIRGI pc_ray; };
 layout(buffer_reference, scalar) buffer LightStates { LightState d[]; };
 layout(buffer_reference, scalar) buffer LightVertices { VCMVertex d[]; };
@@ -38,7 +39,6 @@ uvec4 seed = init_rng(gl_LaunchIDEXT.xy, gl_LaunchSizeEXT.xy,
 uint vcm_light_path_idx =
     (gl_LaunchIDEXT.x * gl_LaunchSizeEXT.y + gl_LaunchIDEXT.y) *
     (pc_ray.max_depth + 1);
-#include "../sbdpt_commons.glsl"
 
 void init_light_spawn_reservoir(out LightSpawnReservoir lsr) {
 
@@ -81,7 +81,7 @@ vec3 generate_light_sample_and_temporal_resampling(float eta_vc, out VCMState li
 
     const vec3 Le = sample_light_Le(
         seed, pc_ray.num_lights, pc_ray.light_triangle_count, light_spawn_sample.cos_theta,
-        light_record, light_spawn_sample.pos, light_spawn_sample.wi, light_spawn_sample.pdf_pos, light_spawn_sample.pdf_dir, light_spawn_sample.pdf_emit, light_spawn_sample.pdf_direct, pc_ray.num_textures);
+        light_record, light_spawn_sample.pos, light_spawn_sample.wi, light_spawn_sample.pdf_pos, light_spawn_sample.pdf_dir, light_spawn_sample.pdf_emit, light_spawn_sample.pdf_direct);
 
         light_spawn_sample.light_record_flags = light_record.flags;
     
@@ -379,7 +379,7 @@ void main() {
 
 
 #define light_vtx(i) vcm_lights.d[vcm_light_path_idx + i]
-    const float radius = pc_ray.radius;
+    const float radius = pc_ray.world_radius;
     const float radius_sqr = radius * radius;
     float eta_vcm = PI * radius_sqr * screen_size;
     float eta_vc = (pc_ray.use_vc == 1) ? 1.0 / eta_vcm : 0;

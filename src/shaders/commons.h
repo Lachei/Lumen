@@ -281,6 +281,7 @@ struct SceneUBO {
 	mat4 inv_projection;
 	vec4 light_pos;
 	vec4 view_pos;
+	vec4 prev_view_pos;
 	mat4 prev_view;
 	mat4 prev_projection;
 	ivec2 clicked_pos;
@@ -521,6 +522,9 @@ struct ReservoirSample {
 	vec3 n_s;
 	vec3 L_o;
 	vec3 f;
+	float depth_v;
+	vec2 uv_v;
+	vec2 pad2;
 };
 
 struct Reservoir {
