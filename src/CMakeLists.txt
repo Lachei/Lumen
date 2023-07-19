@@ -14,6 +14,8 @@ file(GLOB raytracing_src
     "RayTracer/*.hpp"
     "RayTracer/LightResampling/*.h"
     "RayTracer/LightResampling/*.cpp"
+    "RayTracer/MultiView/*.h"
+    "RayTracer/MultiView/*.cpp"
 )
 
 set(src_files "${src_files};${main_src};${framework_src};${raytracing_src}" PARENT_SCOPE)
