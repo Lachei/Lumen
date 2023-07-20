@@ -1,6 +1,7 @@
 #pragma once
 #include "../Integrator.h"
 #include "../SceneConfig.h"
+#include "../../shaders/integrators/mvm/mvm_commons.h"
 
 class MultiViewMarcher : public Integrator {
    public:
@@ -12,8 +13,10 @@ class MultiViewMarcher : public Integrator {
 	virtual void destroy() override;
 
    private:
-	PCPath pc_ray{};
-	SceneConfig& config;
-	nlohmann::json integrator_config;
-	nlohmann::json film_config;
+	PC 				pc{};
+	SceneConfig& 	config;
+	Buffer			multi_view_infos_buffer;
+	std::vector<Buffer> data_buffers; // contains color and depth buffers
+	nlohmann::json 	integrator_config;
+	nlohmann::json 	film_config;
 };

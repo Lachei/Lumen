@@ -3,6 +3,7 @@
 #include "RenderGraph.h"
 #include <spirv_cross/spirv.h>
 #include <spirv_cross/spirv_glsl.hpp>
+#include <stdexcept>
 
 enum class ResourceType { UniformBuffer, StorageBuffer, StorageImage, SampledImage, AccelarationStructure };
 
@@ -505,6 +506,9 @@ int Shader::compile(RenderPass* pass) {
 	LUMEN_TRACE("Compiling shader: {0}", name_with_macros);
 #if USE_SHADERC
 	std::ifstream fin(filename);
+	if (!fin) {
+		LUMEN_ERROR("Shader file not found: " + filename);
+	}
 	std::stringstream buffer;
 	buffer << fin.rdbuf();
 	auto get_ext = [](const std::string& str) -> std::string {

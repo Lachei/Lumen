@@ -1,69 +1,215 @@
 #include "LumenPCH.h"
 #include "MultiViewMarcher.h"
+#include <tinyexr.h>
+#include <ranges>
+
+inline auto s_range(const auto& v){return std::ranges::iota_view(size_t(0), v.size());}
+
+struct ChannelData{
+	std::string channel;
+	std::vector<float> data;
+};
+struct ExrData{
+	std::vector<ChannelData> channels;
+	int h, w;
+	glm::mat4 view_matrix;
+	glm::mat4 projection_matrix;
+};
+ExrData load_depth_exr(std::string_view filename, std::span<std::string> channels) {
+	std::cout << "Load exr " << filename << std::endl;
+	ExrData data;
+	// loading header info
+	EXRVersion version{};
+	EXRHeader header{};
+	EXRImage image{};
+	const char* err{};
+	int ret = ParseEXRVersionFromFile(&version, filename.data());
+	if (ret != TINYEXR_SUCCESS) {
+		std::cout << "Parse Version error" << std::endl;
+		return {};
+	}
+	InitEXRHeader(&header);
+	ret = ParseEXRHeaderFromFile(&header, &version, filename.data(), &err);
+	if (ret != TINYEXR_SUCCESS) {
+		std::cout << "Parse header error:" << err << std::endl;
+		FreeEXRHeader(&header);
+		return {};
+	}
+	std::fill_n(header.requested_pixel_types, header.num_channels, TINYEXR_PIXELTYPE_FLOAT);
+	InitEXRImage(&image);
+	ret = LoadEXRImageFromFile(&image, &header, filename.data(), &err);
+	if (ret != TINYEXR_SUCCESS) {
+		FreeEXRHeader(&header);
+		FreeEXRImage(&image);
+		std::cout << "Load image error: " << err << std::endl;
+		return {};
+	}
+	data.w = image.width;
+	data.h = image.height;
+	for ( auto channel: channels){
+		// Loading channel data
+		std::cout << "Parsing channel " << channel << std::endl;
+		int channel_index = 0;
+		for (; channel_index < header.num_channels && header.channels[channel_index].name != channel; ++channel_index);
+		if (channel_index == header.num_channels) {
+			std::cout << "Could not find channel" << std::endl;
+			continue;
+		}
+		float *channel_data = (float*)(image.images[channel_index]);
+		
+		// loading matrix data
+		std::string matrix_filename = std::string(filename.substr(0, filename.find_last_of("."))) + ".json";
+		std::ifstream matrix_file(matrix_filename, std::ios_base::binary);
+		if (!matrix_file) {
+			std::cout << "Load camera matrices error" << std::endl;
+			continue;
+		}
+		std::string matrix_string{ std::istreambuf_iterator<char>(matrix_file), std::istreambuf_iterator<char>()};
+		nlohmann::json matrices = nlohmann::json::parse(matrix_string);
+		std::vector<float> view_data = matrices["view_matrix"].get<std::vector<float>>();
+		std::vector<float> projection_data = matrices["projection_matrix"].get<std::vector<float>>();
+		std::copy(view_data.begin(), view_data.end(), &data.view_matrix[0][0]);
+		std::copy(projection_data.begin(), projection_data.end(), &data.projection_matrix[0][0]);
+		data.channels.emplace_back(ChannelData{
+										.channel = std::string(channel),
+										.data = {channel_data, channel_data + data.w * data.h}});
+	}
+	FreeEXRHeader(&header);
+	FreeEXRImage(&image);
+	return data;
+}
+struct DepthColor{
+	std::vector<std::vector<float>> depths;
+	std::vector<std::vector<uint>> colors;
+};
+DepthColor convert_exr_data(const std::vector<ExrData>& images){
+	DepthColor depth_color{std::vector<std::vector<float>>(images.size()), std::vector<std::vector<uint>>(images.size())};
+	for (auto i: s_range(images)) {
+		// copying depth over
+		int depth_index = 0;
+		for (; depth_index < images[i].channels.size() && images[i].channels[depth_index].channel != "D"; ++depth_index);
+		if (depth_index >= images[i].channels.size()) {
+			std::cout << "Missing depth information for image" << std::endl;
+			continue;
+		}
+		depth_color.depths[i] = images[i].channels[depth_index].data;
+
+		// assemble color
+		int r_index = 0, g_index = 0, b_index = 0;
+		for (; r_index < images[i].channels.size() && images[i].channels[r_index].channel != "R"; ++r_index);
+		for (; g_index < images[i].channels.size() && images[i].channels[g_index].channel != "G"; ++g_index);
+		for (; b_index < images[i].channels.size() && images[i].channels[b_index].channel != "R"; ++b_index);
+		if (r_index >= images[i].channels.size() ||
+			g_index >= images[i].channels.size() ||
+			b_index >= images[i].channels.size()) {
+			std::cout << "Missing color information for image" << std::endl;
+			continue;
+		}
+			
+		const auto& r = images[i].channels[r_index];
+		const auto& g = images[i].channels[g_index];
+		const auto& b = images[i].channels[b_index];
+		depth_color.colors[i].resize(r.data.size());
+		auto convert_col_comp = [](float v, int p) { return uint(v * 255.f) << (p * 8);};
+		for (auto p: s_range(r.data)) {
+			uint c = convert_col_comp(r.data[p], 3) |
+						convert_col_comp(g.data[p], 2) |
+						convert_col_comp(b.data[p], 1) |
+						convert_col_comp(1.f, 0);
+			depth_color.colors[i][p] = c;
+		}
+	}
+	return depth_color;
+}
+std::vector<MultiViewInfo> extract_multi_view_infos(const std::vector<ExrData>& files) {
+	std::vector<MultiViewInfo> infos(files.size());
+	for(auto i: s_range(files)) {
+		infos[i].cam_view_proj = files[i].projection_matrix * files[i].view_matrix;
+		infos[i].cam_origin = glm::inverse(files[i].view_matrix)[3];
+		infos[i].size_x = files[i].w;
+		infos[i].size_y = files[i].h;
+		// addresses are filled in after the data buffers have been created
+	}
+	return infos;
+}
 
 void MultiViewMarcher::init() {
+	// loading the scene files and converting them to the correct format
+	DepthColor scene_data;
+	std::vector<MultiViewInfo> multi_view_infos;
+	{
+		std::vector<std::string> exr_files;
+		for (auto entry: std::filesystem::directory_iterator("depths/")) {
+			if (entry.path().extension().string() == ".exr")
+				exr_files.emplace_back(entry.path().string());
+		}
+		std::vector<ExrData> frames(exr_files.size());
+		std::vector<std::string> channels{"R", "G", "B", "D"};
+		for ( auto i: s_range(exr_files))
+			frames[i] = load_depth_exr(exr_files[i], channels);
+		scene_data = convert_exr_data(frames);
+		multi_view_infos = extract_multi_view_infos(frames);
+	}
+	// end loading the scenes
+
 	Integrator::init();
-	SceneDesc desc;
-	desc.vertex_addr = vertex_buffer.get_device_address();
-	desc.index_addr = index_buffer.get_device_address();
-	desc.normal_addr = normal_buffer.get_device_address();
-	desc.uv_addr = uv_buffer.get_device_address();
-	desc.material_addr = materials_buffer.get_device_address();
-	desc.prim_info_addr = prim_lookup_buffer.get_device_address();
-	scene_desc_buffer.create("Scene Desc", &instance->vkb.ctx,
-							 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, sizeof(SceneDesc), &desc,
-							 true);
-	pc_ray.frame_num = 0;
-	pc_ray.size_x = instance->width;
-	pc_ray.size_y = instance->height;
-	assert(instance->vkb.rg->settings.shader_inference == true);
-	// For shader resource dependency inference, use this macro to register a buffer address to the rendergraph
-	REGISTER_BUFFER_WITH_ADDRESS(SceneDesc, desc, prim_info_addr, &prim_lookup_buffer, instance->vkb.rg);
+
+	// creating all gpu buffer for rendering
+	// first all data buffers (also writes address information into the multi view infos array)
+	data_buffers.resize(2 * multi_view_infos.size());
+	for (auto i: s_range(multi_view_infos)) {
+		data_buffers[i * 2].create(("depth_" + std::to_string(i)).c_str(), &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+									VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+									scene_data.depths[i].size() * sizeof(scene_data.depths[i][0]), scene_data.depths[i].data(), true);
+
+		data_buffers[i * 2 + 1].create(("color_" + std::to_string(i)).c_str(), &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+									VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+									scene_data.colors[i].size() * sizeof(scene_data.colors[i][0]), scene_data.colors[i].data(), true);
+		multi_view_infos[i].depth_addr = data_buffers[i * 2].get_device_address();
+		multi_view_infos[i].color_addr = data_buffers[i * 2 + 1].get_device_address();
+	}
+	// now as the addresses have been filled into multi view info create multi view info buffer
+	multi_view_infos_buffer.create("multi_view_infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+								VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+								multi_view_infos.size() * sizeof(multi_view_infos[0]), multi_view_infos.data(), true);
+
+	pc.size_x = instance->width;
+	pc.size_y = instance->height;
+	pc.amt_multi_views = static_cast<uint>(multi_view_infos.size());
+	pc.multi_view_infos_addr = multi_view_infos_buffer.get_device_address();
 }
 
 void MultiViewMarcher::render() {
 	CommandBuffer cmd(&instance->vkb.ctx, /*start*/ true, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-	pc_ray.num_lights = (int)lights.size();
-	pc_ray.time = rand() % UINT_MAX;
-	pc_ray.max_depth = config.path_length;
-	pc_ray.sky_col = config.sky_col;
-	pc_ray.total_light_area = total_light_area;
-	pc_ray.light_triangle_count = total_light_triangle_cnt;
-	pc_ray.dir_light_idx = lumen_scene->dir_light_idx;
-	
+	pc.cam_view_inv = glm::inverse(camera->view);
+	pc.cam_proj_inv = glm::inverse(camera->projection);
+
 	std::vector<ShaderMacro> macros;
-	for(char c: film_config["components"].get<std::string>())
-		macros.emplace_back("FILM_COMP_" + std::string(1, char(std::toupper(c))));
+	uint dispatch_x = uint(std::ceil(pc.size_x / float(workgroup_size_x)));
+	uint dispatch_y = uint(std::ceil(pc.size_y / float(workgroup_size_y)));
 	instance->vkb.rg
-		->add_rt("Path", {.shaders = {{"src/shaders/integrators/path/path.rgen"},
-									  {"src/shaders/ray.rmiss"},
-									  {"src/shaders/ray_shadow.rmiss"},
-									  {"src/shaders/ray.rchit"},
-									  {"src/shaders/ray.rahit"}},
-						  .macros = std::move(macros),
-						  .dims = {instance->width, instance->height},
-						  .accel = instance->vkb.tlas.accel})
-		.push_constants(&pc_ray)
-		.bind(std::initializer_list<ResourceBinding>{
-			output_tex,
-			scene_ubo_buffer,
-			scene_desc_buffer,
-		})
-		.bind(mesh_lights_buffer)
-		.bind_texture_array(scene_textures)
-		//.write(output_tex) // Needed if the automatic shader inference is disabled
-		.bind_tlas(instance->vkb.tlas);
+		->add_compute("Raymarch Scene",
+						{.shader = Shader("src/shaders/integrators/mvm/multi_view_marcher.comp"),
+						 .macros = macros,
+						 .dims = {dispatch_x, dispatch_y, 1}})
+		.push_constants(&pc)
+		.bind(output_tex);
+
 	instance->vkb.rg->run_and_submit(cmd);
 }
 
 bool MultiViewMarcher::update() {
-	pc_ray.frame_num++;
+	pc.frame_number++;
 	bool updated = Integrator::update();
 	if (updated) {
-		pc_ray.frame_num = 0;
+		pc.frame_number = 0;
 	}
 	return updated;
 }
 
-void MultiViewMarcher::destroy() { Integrator::destroy(); }
+void MultiViewMarcher::destroy() { 
+	Integrator::destroy(); 
+	multi_view_infos_buffer.destroy();
+	for (auto& b: data_buffers)
+		b.destroy();
+}

@@ -372,8 +372,8 @@ float RayTracer::draw_frame() {
 		save_exr((float*)output_img_buffer_cpu.data, scene.film_config["components"], instance->width, instance->height, output_name.c_str());
 		// matrices are exported in column major style
 		json matrices;
-		matrices["view_matrix"] = std::vector<float>(&integrator->camera->view[0][0], &integrator->camera->view[3][3]);
-		matrices["projection_matrix"] = std::vector<float>(&integrator->camera->projection[0][0], &integrator->camera->projection[3][3]);
+		matrices["view_matrix"] = std::vector<float>(&integrator->camera->view[0][0], &integrator->camera->view[3][3] + 1);
+		matrices["projection_matrix"] = std::vector<float>(&integrator->camera->projection[0][0], &integrator->camera->projection[3][3] + 1);
 		std::string matrix_name =  output_name.substr(0, output_name.find_last_of(".")) + ".json";		
 		std::ofstream matrix_file(matrix_name, std::ios_base::binary);
 		matrix_file << matrices.dump();

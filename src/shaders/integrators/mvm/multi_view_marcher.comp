@@ -1,0 +1,82 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_EXT_shader_atomic_int64 : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int16: enable
+
+#include "mvm_commons.h"
+
+layout(binding = 0, rgba32f) uniform image2D output_image;
+layout(local_size_x = workgroup_size_x, local_size_y = workgroup_size_y) in;
+
+layout(push_constant) uniform _PC { PC pc;};
+layout(buffer_reference, scalar) buffer MultiViewInfos { MultiViewInfo d[]; };
+layout(buffer_reference, scalar) buffer FVec { float d[]; };
+layout(buffer_reference, scalar) buffer UVec { uint d[]; };
+
+MultiViewInfos multi_view_infos = MultiViewInfos(pc.multi_view_infos_addr);
+
+void main(){
+    if(gl_GlobalInvocationID.x >= pc.size_x || gl_GlobalInvocationID.y >= pc.size_y)
+        return;
+        
+    //uint index = gl_GlobalInvocationID.y * pc.size_x + gl_GlobalInvocationID.x;
+    //FVec depth_map = FVec(multi_view_infos.d[0].depth_addr);
+    //imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), vec4(depth_map.d[index] / 50));
+    //return;
+
+    // calculate starting position and direction
+    vec2 norm_dev_coords = (vec2(gl_GlobalInvocationID.xy) + vec2(.5)) / vec2(pc.size_x, pc.size_y) * 2 - 1;
+    vec4 origin = pc.cam_view_inv[3]; // 4th column is the origin transformation
+    vec4 dir = pc.cam_proj_inv * vec4(norm_dev_coords.x, norm_dev_coords.y, 1, 1);
+    float dist = length(dir.xyz);
+    dir = pc.cam_view_inv * vec4(normalize(dir.xyz), 0);
+    vec4 p = origin + .01 * dist * dir;
+    p.w = 1;
+    dir.w = 0;
+    vec4 color = vec4(1);
+    bool inside = false;
+    for (int i = 0; i < 1000; ++i){
+        // going through all views and checking if an intersectoin exists
+        // can skip if the a single views depth map is larger than point distance to center
+        bool inside_obj = false;
+        for (int view = 0; view < pc.amt_multi_views; ++view){
+            mat4 cam_view_proj = multi_view_infos.d[view].cam_view_proj;
+            vec4 pp = cam_view_proj * p;
+            pp /= pp.w;
+            vec2 xy = clamp(pp.xy, vec2(-1), vec2(1));
+            if (xy != pp.xy)    // not inside view
+                continue;
+
+            inside_obj = true;
+            uint view_size_x = multi_view_infos.d[view].size_x;
+            xy = (xy * .5 + .5) * vec2(view_size_x, multi_view_infos.d[view].size_y);
+            ivec2 pixel_pos = ivec2(xy);
+            float depth = distance(p.xyz, multi_view_infos.d[view].cam_origin.xyz);
+
+            // load image depth for comparison
+            uint pixel_index = pixel_pos.y * view_size_x + pixel_pos.x;
+            FVec depth_map = FVec(multi_view_infos.d[view].depth_addr);
+            float shadow_depth = depth_map.d[pixel_index];
+            if (depth < shadow_depth) {
+                inside_obj = false;
+                break;
+            }
+        }
+
+        if (inside_obj) { // color calculation still missing
+            inside = true;
+            break;
+        }
+        p += .02 * dir; // advance position
+    }
+    //color = inside ? vec4(1,0,0,1): vec4(1);
+    color = vec4(vec3(distance(p, origin) / 100), 1);
+    imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
+}
