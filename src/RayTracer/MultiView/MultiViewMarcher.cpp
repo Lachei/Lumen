@@ -156,17 +156,22 @@ void MultiViewMarcher::init() {
 
 	// creating all gpu buffer for rendering
 	// first all data buffers (also writes address information into the multi view infos array)
-	data_buffers.resize(2 * multi_view_infos.size());
+	auto sampler_info = vk::sampler_create_info();
+	sampler_info.minFilter = sampler_info.magFilter = VK_FILTER_LINEAR;
+	sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sampler_info.maxLod = FLT_MAX;
+	vk::check(vkCreateSampler(instance->vkb.ctx.device, &sampler_info, nullptr, &texture_sampler), "Could not create image sammpler");
+	textures.resize(2 * multi_view_infos.size());
 	for (auto i: s_range(multi_view_infos)) {
-		data_buffers[i * 2].create(("depth_" + std::to_string(i)).c_str(), &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-									VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-									scene_data.depths[i].size() * sizeof(scene_data.depths[i][0]), scene_data.depths[i].data(), true);
-
-		data_buffers[i * 2 + 1].create(("color_" + std::to_string(i)).c_str(), &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-									VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-									scene_data.colors[i].size() * sizeof(scene_data.colors[i][0]), scene_data.colors[i].data(), true);
-		multi_view_infos[i].depth_addr = data_buffers[i * 2].get_device_address();
-		multi_view_infos[i].color_addr = data_buffers[i * 2 + 1].get_device_address();
+		auto img_extent = VkExtent2D{multi_view_infos[i].size_x, multi_view_infos[i].size_y};
+		auto depth_info = make_img2d_ci(img_extent, VK_FORMAT_R32_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT, false);
+		textures[i * 2].load_from_data(&instance->vkb.ctx, scene_data.depths[i].data(), scene_data.depths[i].size() * sizeof(scene_data.depths[i][0]),
+										depth_info, texture_sampler, VK_IMAGE_USAGE_SAMPLED_BIT);
+		auto color_info = make_img2d_ci(img_extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
+		textures[i * 2 + 1].load_from_data(&instance->vkb.ctx, scene_data.colors[i].data(), scene_data.colors[i].size() * sizeof(scene_data.colors[i][0]),
+										color_info, texture_sampler, VK_IMAGE_USAGE_SAMPLED_BIT);
+		multi_view_infos[i].depth_texture_index = i * 2;
+		multi_view_infos[i].color_texture_index = i * 2 + 1;
 	}
 	// now as the addresses have been filled into multi view info create multi view info buffer
 	multi_view_infos_buffer.create("multi_view_infos", &instance->vkb.ctx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -193,7 +198,8 @@ void MultiViewMarcher::render() {
 						 .macros = macros,
 						 .dims = {dispatch_x, dispatch_y, 1}})
 		.push_constants(&pc)
-		.bind(output_tex);
+		.bind(output_tex)
+		.bind_texture_array(textures);
 
 	instance->vkb.rg->run_and_submit(cmd);
 }
@@ -210,6 +216,7 @@ bool MultiViewMarcher::update() {
 void MultiViewMarcher::destroy() { 
 	Integrator::destroy(); 
 	multi_view_infos_buffer.destroy();
-	for (auto& b: data_buffers)
-		b.destroy();
+	vkDestroySampler(instance->vkb.ctx.device, texture_sampler, nullptr);
+	for (auto& t: textures)
+		t.destroy();
 }

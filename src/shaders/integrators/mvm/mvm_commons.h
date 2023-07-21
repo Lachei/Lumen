@@ -53,12 +53,12 @@ struct PC{
 };
 
 struct MultiViewInfo{
-    mat4    cam_view_proj;
-    vec4    cam_origin;
-    uint    size_x;
-    uint    size_y;
-    uint64_t depth_addr;
-    uint64_t color_addr;
+    mat4 cam_view_proj;
+    vec4 cam_origin;
+    uint size_x;
+    uint size_y;
+    uint depth_texture_index;
+    uint color_texture_index;
 };
 
 #endif

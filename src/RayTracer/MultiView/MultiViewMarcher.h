@@ -16,7 +16,8 @@ class MultiViewMarcher : public Integrator {
 	PC 				pc{};
 	SceneConfig& 	config;
 	Buffer			multi_view_infos_buffer;
-	std::vector<Buffer> data_buffers; // contains color and depth buffers
+	VkSampler		texture_sampler;
+	std::vector<Texture2D> textures; // contains color and depth buffers
 	nlohmann::json 	integrator_config;
 	nlohmann::json 	film_config;
 };
