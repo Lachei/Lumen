@@ -37,7 +37,7 @@ void main() {
                                                2. / gl_LaunchSizeEXT.y, 0, 1));
     area_int /= (area_int.w);
     const float cam_area = abs(area_int.x * area_int.y);
-    float first_hit_depth = 1.f/0;
+    float first_hit_depth = 1.f/0.f;
     bool specular = false;
     vec3 throughput = vec3(1);
     for (int depth = 0;; depth++) {

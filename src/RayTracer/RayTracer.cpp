@@ -369,6 +369,7 @@ float RayTracer::draw_frame() {
 			std::filesystem::create_directory(path);
 			
 		write_exr = false;
+		vkDeviceWaitIdle(instance->vkb.ctx.device);
 		save_exr((float*)output_img_buffer_cpu.data, scene.film_config["components"], instance->width, instance->height, output_name.c_str());
 		// matrices are exported in column major style
 		json matrices;

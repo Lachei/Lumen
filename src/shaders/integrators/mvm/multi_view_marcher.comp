@@ -60,7 +60,7 @@ void main(){
 
             // load image depth for comparison
             float shadow_depth = texture(textures[multi_view_infos.d[view].depth_texture_index], xyz.xy).x;
-            if (depth < shadow_depth) {
+            if (depth < shadow_depth || isnan(shadow_depth)) {
                 inside_obj = false;
                 break;
             }

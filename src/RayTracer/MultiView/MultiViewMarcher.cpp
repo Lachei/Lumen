@@ -160,6 +160,7 @@ void MultiViewMarcher::init() {
 	sampler_info.minFilter = sampler_info.magFilter = VK_FILTER_LINEAR;
 	sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	sampler_info.maxLod = FLT_MAX;
+	sampler_info.addressModeU = sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 	vk::check(vkCreateSampler(instance->vkb.ctx.device, &sampler_info, nullptr, &texture_sampler), "Could not create image sammpler");
 	textures.resize(2 * multi_view_infos.size());
 	for (auto i: s_range(multi_view_infos)) {
