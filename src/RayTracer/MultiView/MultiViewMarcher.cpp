@@ -98,7 +98,7 @@ DepthColor convert_exr_data(const std::vector<ExrData>& images){
 		int r_index = 0, g_index = 0, b_index = 0;
 		for (; r_index < images[i].channels.size() && images[i].channels[r_index].channel != "R"; ++r_index);
 		for (; g_index < images[i].channels.size() && images[i].channels[g_index].channel != "G"; ++g_index);
-		for (; b_index < images[i].channels.size() && images[i].channels[b_index].channel != "R"; ++b_index);
+		for (; b_index < images[i].channels.size() && images[i].channels[b_index].channel != "B"; ++b_index);
 		if (r_index >= images[i].channels.size() ||
 			g_index >= images[i].channels.size() ||
 			b_index >= images[i].channels.size()) {
@@ -110,12 +110,12 @@ DepthColor convert_exr_data(const std::vector<ExrData>& images){
 		const auto& g = images[i].channels[g_index];
 		const auto& b = images[i].channels[b_index];
 		depth_color.colors[i].resize(r.data.size());
-		auto convert_col_comp = [](float v, int p) { return uint(v * 255.f) << (p * 8);};
+		auto convert_col_comp = [](float v, int p) { return uint(std::min(v, 1.f) * 255.f) << (p * 8);};
 		for (auto p: s_range(r.data)) {
-			uint c = convert_col_comp(r.data[p], 3) |
-						convert_col_comp(g.data[p], 2) |
-						convert_col_comp(b.data[p], 1) |
-						convert_col_comp(1.f, 0);
+			uint c = convert_col_comp(b.data[p], 0) |
+						convert_col_comp(g.data[p], 1) |
+						convert_col_comp(r.data[p], 2) |
+						convert_col_comp(1.f, 3);
 			depth_color.colors[i][p] = c;
 		}
 	}
