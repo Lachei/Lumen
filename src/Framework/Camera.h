@@ -37,7 +37,7 @@ class Camera {
 		view = glm::inverse(res);
 		camera = res;
 	}
-	glm::mat4 projection{1.f};
+	glm::mat4 projection{0.f};
 	glm::mat4 view{1.f}, camera{1.f};
 	float cam_near, cam_far;
 	CameraType type = CameraType::FPS;
