@@ -53,6 +53,8 @@ void save_exr(const float* rgb, std::string_view channels, int width, int height
 
 	std::vector<int> pixel_types(channels.size(), TINYEXR_PIXELTYPE_FLOAT);
 	std::vector<int> requested_pixel_types(channels.size(), TINYEXR_PIXELTYPE_HALF);
+	int depth_index; for(;depth_index < channels.size() && channels[depth_index] != 'D'; ++depth_index);
+	if (depth_index < channels.size()) requested_pixel_types[channels.size() - 1- depth_index] = TINYEXR_PIXELTYPE_FLOAT;
 	header.pixel_types = pixel_types.data();
 	header.requested_pixel_types = requested_pixel_types.data();
 

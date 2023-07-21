@@ -41,7 +41,7 @@ void main(){
     dir.w = 0;
     vec4 color = vec4(1);
     bool inside = false;
-    for (int i = 0; i < 1000; ++i){
+    for (int i = 0; i < 2000; ++i){
         // going through all views and checking if an intersectoin exists
         // can skip if the a single views depth map is larger than point distance to center
         bool inside_obj = false;
@@ -54,8 +54,11 @@ void main(){
                 continue;
 
             inside_obj = true;
-            uint view_size_x = multi_view_infos.d[view].size_x;
+            vec2 view_size = vec2(multi_view_infos.d[view].size_x, multi_view_infos.d[view].size_y);
+            //xyz.xy *=  (view_size - vec2(8)) / view_size;
             xyz.xy = xyz.xy * .5 + .5;
+            //xyz.xy *= (view_size - 1) / view_size;
+            //xyz.xy += vec2(1, -1) / view_size;
             float depth = distance(p.xyz, multi_view_infos.d[view].cam_origin.xyz);
 
             // load image depth for comparison
@@ -70,7 +73,7 @@ void main(){
             inside = true;
             break;
         }
-        p += .02 * dir; // advance position
+        p += .005 * dir; // advance position
     }
     //color = inside ? vec4(1,0,0,1): vec4(1);
     color = vec4(vec3(distance(p, origin) / 100), 1);

@@ -28,8 +28,9 @@ void main() {
     const vec2 in_uv = (pixel) / vec2(gl_LaunchSizeEXT.xy);
 #endif
     vec2 d = in_uv * 2.0 - 1.0;
-    vec4 origin = ubo.inv_view * vec4(0, 0, 0, 1);
-    vec4 target = ubo.inv_projection * vec4(d.x, d.y, 1, 1);
+    vec4 cam_center = ubo.inv_view[3];
+    vec4 target = ubo.inv_projection * vec4(d.x, d.y, -1, 1);
+    vec4 origin = ubo.inv_view * target / target.w;
     vec3 direction = vec3(sample_camera(d));
 
     vec3 col = vec3(0);
@@ -51,8 +52,8 @@ void main() {
             col += throughput * shade_atmosphere(pc_ray.dir_light_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
             break;
         }
-        if(depth == 0)
-            first_hit_depth = distance(payload.pos.xyz, origin.xyz);
+        if (depth == 0)
+            first_hit_depth = distance(payload.pos.xyz, cam_center.xyz);
         const Material hit_mat =
             load_material(payload.material_idx, payload.uv);
         if (depth == 0 || specular) {
