@@ -33,6 +33,7 @@ void main(){
 
     // only loading the position, color only needed when depth is really written out
     vec4 p = vec4(vertices.d[gl_GlobalInvocationID.x].xyz, 1);
+    vec3 world_pos = p.xyz;
     p = pc.cam_matrix * p;
     p /= p.w;
     
@@ -43,12 +44,15 @@ void main(){
     if(clamped != p.xyz)
         return;
 
-    ivec2 pixel_pos = ivec2((p.xy * .5 + .5) * vec2(pc.size_x, pc.size_y) + .5f);
+    p.xyz = p.xyz * .5 + .5;
+    ivec2 pixel_pos = ivec2(p.xy * vec2(pc.size_x, pc.size_y) + .5f);
 
+    uint64_t depth = floatBitsToUint(1 - p.z);  // inverting the depth value as the buffer is filled with 0
+    uint64_t depth_color = depth << 32;
+
+#ifndef RENDER_SPLATS
     uint lin_pos = pixel_pos.x + pixel_pos.y * pc.size_x;
 
-    uint64_t depth = floatBitsToUint(1 - p.z);  // multiplication by uint(-1) maps 1 to max uint
-    uint64_t depth_color = depth << 32;
     if(depth_color > depths.d[lin_pos]){
         //vec3 col = colors.d[gl_GlobalInvocationID.x];
         //depth_color |= uint(col.x * 255) << 24;
@@ -57,4 +61,30 @@ void main(){
         depth_color |= colors.d[gl_GlobalInvocationID.x];
         atomicMax(depths.d[lin_pos], depth_color);
     }
+#else
+    // calculating the pixel footprint and going through all pixels to check for rendering
+    float d = distance(pc.cam_view_inv[3].xyz, world_pos);
+    int pixel_footprint = int(8 * .5 * 3.14 / d + .5); // approximate 45^ fov
+    pixel_footprint = min(pixel_footprint, 20);
+    int pixel_foot_2 = pixel_footprint * pixel_footprint;
+    for (int i = -pixel_footprint; i <= pixel_footprint; ++i) {
+        int j_foot = int(sqrt(float(pixel_foot_2 - i * i)) + .5);
+        for (int j = -j_foot; j <= j_foot; ++j) {
+            ivec2 cur_pos = pixel_pos + ivec2(i, j);
+            ivec2 clamped_pos = clamp(cur_pos, ivec2(0), ivec2(pc.size_x, pc.size_y));
+            if(cur_pos != clamped_pos)
+                continue;
+            uint lin_pos = cur_pos.x + cur_pos.y * pc.size_x;
+
+            if(depth_color > depths.d[lin_pos]){
+                //vec3 col = colors.d[gl_GlobalInvocationID.x];
+                //depth_color |= uint(col.x * 255) << 24;
+                //depth_color |= uint(col.y * 255) << 16;
+                //depth_color |= uint(col.z * 255) << 8;
+                depth_color |= colors.d[gl_GlobalInvocationID.x];
+                atomicMax(depths.d[lin_pos], depth_color);
+            }
+        }
+    }
+#endif
 }
