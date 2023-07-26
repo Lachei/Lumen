@@ -59,7 +59,7 @@ void main(){
             vec2 view_size = vec2(multi_view_infos.d[view].size_x, multi_view_infos.d[view].size_y);
             xyz.xy = xyz.xy * .5 + .5;
             vec4 view_center = multi_view_infos.d[view].cam_origin;
-            float depth = distance(p.xyz, view_center.xyz);
+            float depth = xyz.z;
 
             // load image depth for comparison
             float shadow_depth = texture(textures[multi_view_infos.d[view].depth_texture_index], xyz.xy).x;
@@ -70,7 +70,7 @@ void main(){
             if(abs(depth - shadow_depth) < .04){
                 float w = 1 +  dot(-dir.xyz, normalize(view_center.xyz - p.xyz));
                 w = pow(w, 12);
-                col += w * texture(textures[multi_view_infos.d[view].color_texture_index], xyz.xy).rgb;
+                col += w * texture(textures[multi_view_infos.d[view].color_texture_index], xyz.xy).bgr;
                 weight_sum += w;
             }
         }

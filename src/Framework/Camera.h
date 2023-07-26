@@ -112,15 +112,15 @@ class PerspectiveCamera : public Camera {
 		if (use_fov) {
 			projection[0][0] = 1 / (aspect_ratio * tanf(glm::radians(fov / 2)));
 			projection[1][1] = -1 / (tanf(glm::radians(fov / 2)));
-			projection[2][2] = cam_far / (cam_near - cam_far);
+			projection[2][2] = (cam_far + cam_near) / (cam_near - cam_far);
 			projection[2][3] = -1;
-			projection[3][2] = cam_near * cam_far / (cam_near - cam_far);
+			projection[3][2] = 2 * cam_near * cam_far / (cam_near - cam_far);
 		} else {
 			projection[0][0] = 2 / (right - left);
 			projection[1][1] = -2 / (top - bot);
-			projection[2][2] = cam_far / (cam_near - cam_far);
+			projection[2][2] = (cam_far + cam_near) / (cam_near - cam_far);
 			projection[2][3] = -1;
-			projection[3][2] = cam_near * cam_far / (cam_near - cam_far);
+			projection[3][2] = 2 * cam_near * cam_far / (cam_near - cam_far);
 		}
 	}
 

@@ -4,6 +4,7 @@
 #include <ranges>
 
 inline auto s_range(const auto& v){return std::ranges::iota_view(size_t(0), v.size());}
+inline auto i_range(const auto v){return std::ranges::iota_view(decltype(v)(0), v);}
 template<typename T>
 inline auto minmax(const std::vector<T>& range){
 	T min = std::numeric_limits<T>::max();
@@ -157,22 +158,39 @@ void remap_depth_values(std::vector<ExrData>& data) {
 			std::cout << "Problem finding depth channel" << std::endl;
 			continue;
 		}
-		auto [min, max] = minmax(data[frame].channels[channel_idx].data);
-		min = std::max(.001f, min);
+		// transforming from spherical depth to linear depth
 		auto& projection = data[frame].projection_matrix;
 		auto inv_proj = glm::inverse(projection);
-		glm::vec4 near(0,0,-1,1);
-		glm::vec4 far(0,0,1,1);
-		near = inv_proj * near;
-		far = inv_proj * far;
-		near /= near.w;
-		far /= far.w;
-		projection[2][2] = max / (min - max);
-		projection[3][2] = max * min / (min - max);
+		//for (int y: i_range(data[frame].h)) {
+		//	int base_offset = y * data[frame].w;
+		//	for (int x: i_range(data[frame].w)) {
+		//		glm::vec4 local_p((x + .5f) / data[frame].w * 2 - 1,
+		//						  (y + .5f) / data[frame].h * 2 - 1,
+		//						  1,1);
+		//		local_p = inv_proj * local_p;
+		//		local_p /= local_p.w;
+		//		float cos = -glm::normalize(local_p).z;
+		//		data[frame].channels[channel_idx].data[base_offset + x] *= cos;
+		//	}
+		//}
 		for(auto& d: data[frame].channels[channel_idx].data){
-			if(d == 0)
-				bool how = true;
 			glm::vec4 t(0,0,d,1);
+			t = inv_proj * t;
+			t /= t.w;
+			d = -t.z;
+		}
+		auto [min, max] = minmax(data[frame].channels[channel_idx].data);
+		
+		projection[2][2] = (min + max) / (min - max);
+		projection[3][2] = 2 * max * min / (min - max);
+		//for (int y: i_range(data[frame].h)) {
+		//	int base_offset = y * data[frame].w;
+		//	for (int x: i_range(data[frame].w)) {
+		//		
+		//	}
+		//}
+		for(auto& d: data[frame].channels[channel_idx].data){
+			glm::vec4 t(0,0,-d,1);
 			t = projection * t;
 			t /= t.w;
 			d = t.z;

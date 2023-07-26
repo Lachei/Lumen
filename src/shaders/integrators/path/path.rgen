@@ -51,8 +51,10 @@ void main() {
             col += throughput * shade_atmosphere(pc_ray.dir_light_idx, pc_ray.sky_col, origin.xyz, direction, tmax);
             break;
         }
-        if (depth == 0)
-            first_hit_depth = distance(payload.pos.xyz, origin.xyz);
+        if (depth == 0){
+            vec4 proj = ubo.projection * ubo.view * vec4(payload.pos.xyz, 1);
+            first_hit_depth = proj.z / proj.w;
+        }
         const Material hit_mat =
             load_material(payload.material_idx, payload.uv);
         if (depth == 0 || specular) {
