@@ -4,7 +4,20 @@
 #include <ranges>
 
 inline auto s_range(const auto& v){return std::ranges::iota_view(size_t(0), v.size());}
+template<typename T>
+inline auto minmax(const std::vector<T>& range){
+	T min = std::numeric_limits<T>::max();
+	T max = std::numeric_limits<T>::lowest();
+	for (const auto& e: range) {
+		if (!isinf(e) && !isnan(e)){
+			min = std::min(e, min);
+			max = std::max(e, max);
+		} 
+	}
+	return std::tuple{min, max};
+}
 
+using MultiViewInfos = std::vector<MultiViewInfo>;
 struct ChannelData{
 	std::string channel;
 	std::vector<float> data;
@@ -132,11 +145,48 @@ std::vector<MultiViewInfo> extract_multi_view_infos(const std::vector<ExrData>& 
 	}
 	return infos;
 }
+// remaps the depth values from lienar to near far
+// the near far planes are calculated by using the min and max depth values
+// also adopts the projection matrices and exchanges the min far planes there
+#undef near
+#undef far
+void remap_depth_values(std::vector<ExrData>& data) {
+	for (auto frame: s_range(data)) {
+		int channel_idx{}; for (; channel_idx < data[frame].channels.size() && data[frame].channels[channel_idx].channel != "D"; ++channel_idx);
+		if (channel_idx == data[frame].channels.size()) {
+			std::cout << "Problem finding depth channel" << std::endl;
+			continue;
+		}
+		auto [min, max] = minmax(data[frame].channels[channel_idx].data);
+		min = std::max(.001f, min);
+		auto& projection = data[frame].projection_matrix;
+		auto inv_proj = glm::inverse(projection);
+		glm::vec4 near(0,0,-1,1);
+		glm::vec4 far(0,0,1,1);
+		near = inv_proj * near;
+		far = inv_proj * far;
+		near /= near.w;
+		far /= far.w;
+		projection[2][2] = max / (min - max);
+		projection[3][2] = max * min / (min - max);
+		for(auto& d: data[frame].channels[channel_idx].data){
+			if(d == 0)
+				bool how = true;
+			glm::vec4 t(0,0,d,1);
+			t = projection * t;
+			t /= t.w;
+			d = t.z;
+		}
+		auto [new_min, new_max] = minmax(data[frame].channels[channel_idx].data);
+		std::cout << "Old min max: " << min << ", " << max << std::endl;
+		std::cout << "New min max: " << new_min << ", " << new_max << std::endl;
+	}
+}
 
 void MultiViewMarcher::init() {
 	// loading the scene files and converting them to the correct format
 	DepthColor scene_data;
-	std::vector<MultiViewInfo> multi_view_infos;
+	MultiViewInfos multi_view_infos;
 	{
 		std::vector<std::string> exr_files;
 		for (auto entry: std::filesystem::directory_iterator("depths/")) {
@@ -147,6 +197,7 @@ void MultiViewMarcher::init() {
 		std::vector<std::string> channels{"R", "G", "B", "D"};
 		for ( auto i: s_range(exr_files))
 			frames[i] = load_depth_exr(exr_files[i], channels);
+		remap_depth_values(frames);
 		scene_data = convert_exr_data(frames);
 		multi_view_infos = extract_multi_view_infos(frames);
 	}
