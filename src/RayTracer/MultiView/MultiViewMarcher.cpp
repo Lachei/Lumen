@@ -140,9 +140,31 @@ std::vector<MultiViewInfo> extract_multi_view_infos(const std::vector<ExrData>& 
 	std::vector<MultiViewInfo> infos(files.size());
 	for(auto i: s_range(files)) {
 		infos[i].cam_view_proj = files[i].projection_matrix * files[i].view_matrix;
-		infos[i].cam_origin = glm::inverse(files[i].view_matrix)[3];
+		// filling frustrum information
+		auto proj_inv = glm::inverse(infos[i].cam_view_proj);
+		infos[i].p1 = proj_inv * vec4(-1,-1,-1,1);
+		infos[i].p1 /= infos[i].p1.w;
+		infos[i].p2 = proj_inv * vec4(1,1,1,1);
+		infos[i].p2 /= infos[i].p2.w;
+		auto p1 = infos[i].p1;
+		auto p2 = infos[i].p2;
+		auto h1 = proj_inv * vec4(-1, -1, 1, 1);
+		auto h2 = proj_inv * vec4(-1, 1, -1, 1);
+		auto h3 = proj_inv * vec4(1, 1, -1, 1);
+		auto h4 = proj_inv * vec4(1, -1, -1, 1);
+		h1 /= h1.w;
+		h2 /= h2.w;
+		h3 /= h3.w;
+		h4 /= h4.w;
+		infos[i].n0 = vec4(glm::normalize(glm::cross(vec3(h4 - p1), vec3(h2 - p1))), 1);
+		infos[i].n1 = vec4(glm::normalize(glm::cross(vec3(p2 - h3), vec3(h2 - h3))), 1);
+		infos[i].n2 = vec4(glm::normalize(glm::cross(vec3(h2 - p1), vec3(h1 - p1))), 1);
+		infos[i].n3 = vec4(glm::normalize(glm::cross(vec3(h1 - p1), vec3(h4 - p1))), 1);
+		infos[i].n4 = vec4(glm::normalize(glm::cross(vec3(h4 - h3), vec3(p2 - h3))), 1);
+		//infos[i].cam_origin = glm::inverse(files[i].view_matrix)[3];
 		infos[i].size_x = files[i].w;
 		infos[i].size_y = files[i].h;
+		
 		// addresses are filled in after the data buffers have been created
 	}
 	return infos;
@@ -159,21 +181,9 @@ void remap_depth_values(std::vector<ExrData>& data) {
 			std::cout << "Problem finding depth channel" << std::endl;
 			continue;
 		}
-		// transforming from spherical depth to linear depth
+		// transforming camera depths to world depths (needed for new view frustrum calcs)
 		auto& projection = data[frame].projection_matrix;
 		auto inv_proj = glm::inverse(projection);
-		//for (int y: i_range(data[frame].h)) {
-		//	int base_offset = y * data[frame].w;
-		//	for (int x: i_range(data[frame].w)) {
-		//		glm::vec4 local_p((x + .5f) / data[frame].w * 2 - 1,
-		//						  (y + .5f) / data[frame].h * 2 - 1,
-		//						  1,1);
-		//		local_p = inv_proj * local_p;
-		//		local_p /= local_p.w;
-		//		float cos = -glm::normalize(local_p).z;
-		//		data[frame].channels[channel_idx].data[base_offset + x] *= cos;
-		//	}
-		//}
 		for(auto& d: data[frame].channels[channel_idx].data){
 			glm::vec4 t(0,0,d,1);
 			t = inv_proj * t;
@@ -184,12 +194,6 @@ void remap_depth_values(std::vector<ExrData>& data) {
 		
 		projection[2][2] = (min + max) / (min - max);
 		projection[3][2] = 2 * max * min / (min - max);
-		//for (int y: i_range(data[frame].h)) {
-		//	int base_offset = y * data[frame].w;
-		//	for (int x: i_range(data[frame].w)) {
-		//		
-		//	}
-		//}
 		for(auto& d: data[frame].channels[channel_idx].data){
 			glm::vec4 t(0,0,-d,1);
 			t = projection * t;
@@ -216,7 +220,7 @@ void MultiViewMarcher::init() {
 		std::vector<std::string> channels{"R", "G", "B", "D"};
 		for ( auto i: s_range(exr_files))
 			frames[i] = load_depth_exr(exr_files[i], channels);
-		//remap_depth_values(frames);
+		remap_depth_values(frames);
 		scene_data = convert_exr_data(frames);
 		multi_view_infos = extract_multi_view_infos(frames);
 	}

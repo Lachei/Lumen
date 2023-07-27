@@ -9,6 +9,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 #extension GL_EXT_shader_atomic_int64 : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int16: enable
+#extension GL_EXT_control_flow_attributes: enable
 
 #include "mvm_commons.h"
 
@@ -20,6 +21,43 @@ layout(push_constant) uniform _PC { PC pc;};
 layout(buffer_reference, scalar) buffer MultiViewInfos { MultiViewInfo d[]; };
 
 MultiViewInfos multi_view_infos = MultiViewInfos(pc.multi_view_infos_addr);
+
+// intersects the ray given as origin and direction with the view frustrum at the given index
+// return the entry and exit lambda (position can be retrieved via: p = ray_start + lambda * ray_dir)
+// if entry lambda > exit lambda no intersection
+vec2 frustrum_intersection(vec3 ray_start, vec3 ray_dir, int view){
+    vec2 lambdas = vec2(-1./0., 1./0.);
+
+    [[unroll]]
+    for (int face = 0; face < 6; ++face) {
+        // load face parameters
+        vec3 s_face;
+        if (face == 0 || face == 2 || face == 3)
+            s_face = multi_view_infos.d[view].p1.xyz;
+        else
+            s_face = multi_view_infos.d[view].p2.xyz;
+        
+        vec3 normal;
+        switch(face){
+        case 0: normal = multi_view_infos.d[view].n0.xyz; break;
+        case 1: normal = multi_view_infos.d[view].n1.xyz; break;
+        case 2: normal = multi_view_infos.d[view].n2.xyz; break;
+        case 3: normal = multi_view_infos.d[view].n3.xyz; break;
+        case 4: normal = multi_view_infos.d[view].n4.xyz; break;
+        case 5: normal = -multi_view_infos.d[view].n0.xyz; break; // the back face is simply the normal swapped
+        }
+        
+        // calculating the intersection
+        float lambda = (dot(s_face, normal) - dot(ray_start, normal)) / dot(ray_dir, normal);
+        
+        // either add to start or end of ray depending on ray orientation
+        if (dot(ray_dir, normal) > 0)   // facing the same direction, front
+            lambdas[0] = max(lambdas[0], lambda);
+        else
+            lambdas[1] = min(lambdas[1], lambda);
+    }
+    return lambdas;
+}
 
 void main(){
     if(gl_GlobalInvocationID.x >= pc.size_x || gl_GlobalInvocationID.y >= pc.size_y)
@@ -39,8 +77,21 @@ void main(){
     vec4 p = origin + .01 * dist * dir;
     p.w = 1;
     dir.w = 0;
-    vec4 color = vec4(1);
+    vec4 color = vec4(0);
+    int color_count = 0;
     bool inside = false;
+    
+    for (int view = 0; view < pc.amt_multi_views; ++view) {
+        vec2 intersect = frustrum_intersection(origin.xyz, dir.xyz, view);
+        //color = vec4(.1) * intersect.y;
+        //break;
+        if (intersect.x < intersect.y){
+            color.xyz += vec3(sin(1.4 * view), sin(.9 * view + .3), sin(.3 * view + 1.1));
+            color_count++;
+        }
+    }
+    color /= color_count;
+    /*
     for (int i = 0; i < 2000; ++i){
         // going through all views and checking if an intersectoin exists
         // can skip if the a single views depth map is larger than point distance to center
@@ -67,7 +118,7 @@ void main(){
                 inside_obj = false;
                 break;
             }
-            if(abs(depth - shadow_depth) < .000004){
+            if(1.f / abs(depth - shadow_depth) > 100){  // 1 / depth_diff is a linear approximation of the equality
                 float w = 1 +  dot(-dir.xyz, normalize(view_center.xyz - p.xyz));
                 w = pow(w, 12);
                 col += w * texture(textures[multi_view_infos.d[view].color_texture_index], xyz.xy).rgb;
@@ -82,6 +133,7 @@ void main(){
         }
         p += .02 * dir; // advance position
     }
+    */
     //color = inside ? vec4(1,0,0,1): vec4(1);
     //color = vec4(vec3(distance(p, origin) / 100), 1);
     imageStore(output_image, ivec2(gl_GlobalInvocationID.xy), color);
