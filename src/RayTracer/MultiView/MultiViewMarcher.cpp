@@ -2,6 +2,7 @@
 #include "MultiViewMarcher.h"
 #include <tinyexr.h>
 #include <ranges>
+#include <cmath>
 
 inline auto s_range(const auto& v){return std::ranges::iota_view(size_t(0), v.size());}
 inline auto i_range(const auto v){return std::ranges::iota_view(decltype(v)(0), v);}
@@ -10,7 +11,7 @@ inline auto minmax(const std::vector<T>& range){
 	T min = std::numeric_limits<T>::max();
 	T max = std::numeric_limits<T>::lowest();
 	for (const auto& e: range) {
-		if (!isinf(e) && !isnan(e)){
+		if (!std::isinf(e) && !std::isnan(e)){
 			min = std::min(e, min);
 			max = std::max(e, max);
 		} 
@@ -215,7 +216,7 @@ void MultiViewMarcher::init() {
 		std::vector<std::string> channels{"R", "G", "B", "D"};
 		for ( auto i: s_range(exr_files))
 			frames[i] = load_depth_exr(exr_files[i], channels);
-		remap_depth_values(frames);
+		//remap_depth_values(frames);
 		scene_data = convert_exr_data(frames);
 		multi_view_infos = extract_multi_view_infos(frames);
 	}

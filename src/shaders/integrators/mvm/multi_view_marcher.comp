@@ -67,10 +67,10 @@ void main(){
                 inside_obj = false;
                 break;
             }
-            if(abs(depth - shadow_depth) < .04){
+            if(abs(depth - shadow_depth) < .000004){
                 float w = 1 +  dot(-dir.xyz, normalize(view_center.xyz - p.xyz));
                 w = pow(w, 12);
-                col += w * texture(textures[multi_view_infos.d[view].color_texture_index], xyz.xy).bgr;
+                col += w * texture(textures[multi_view_infos.d[view].color_texture_index], xyz.xy).rgb;
                 weight_sum += w;
             }
         }
