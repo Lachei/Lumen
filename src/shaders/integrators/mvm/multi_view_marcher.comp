@@ -85,8 +85,11 @@ void main(){
         vec2 intersect = frustrum_intersection(origin.xyz, dir.xyz, view);
         //color = vec4(.1) * intersect.y;
         //break;
-        if (intersect.x < intersect.y){
-            color.xyz += vec3(sin(1.4 * view), sin(.9 * view + .3), sin(.3 * view + 1.1));
+        if (intersect.x < intersect.y && intersect.x > 0){
+            vec3 p = intersect.x * dir.xyz + origin.xyz;
+            ivec3 pi = ivec3(p / 2);
+            int v = 2349930122 * pi.x ^ 1918329102 * pi.y ^ 1239093154 * pi.z;
+            color.xyz += vec3(abs(sin(.0001 * v)), abs(sin(.0009 * v + .3)), abs(sin(.0003 * v + 1.1)));
             color_count++;
         }
     }
