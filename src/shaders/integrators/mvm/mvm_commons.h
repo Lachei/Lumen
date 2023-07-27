@@ -60,6 +60,8 @@ struct MultiViewInfo{
     uint size_x;
     uint size_y;
     uint depth_texture_index;
+    uint mip_texture_index;
+    uint mip_texture_count;
     uint color_texture_index;
 };
 
