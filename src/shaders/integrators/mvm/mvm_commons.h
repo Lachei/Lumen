@@ -54,7 +54,8 @@ struct PC{
 
 struct MultiViewInfo{
     mat4 cam_view_proj;
-    //vec4 cam_origin;
+    mat4 cam_view_proj_inv;
+    vec4 cam_origin;
     vec4 p1, p2;
     vec4 n0, n1, n2, n3, n4;
     uint size_x;

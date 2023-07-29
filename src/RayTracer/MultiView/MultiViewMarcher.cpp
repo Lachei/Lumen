@@ -170,6 +170,7 @@ std::vector<MultiViewInfo> extract_multi_view_infos(const std::vector<ExrData>& 
 	std::vector<MultiViewInfo> infos(files.size());
 	for(auto i: s_range(files)) {
 		infos[i].cam_view_proj = files[i].projection_matrix * files[i].view_matrix;
+		infos[i].cam_view_proj_inv = glm::inverse(infos[i].cam_view_proj);
 		// filling frustrum information
 		auto proj_inv = glm::inverse(infos[i].cam_view_proj);
 		infos[i].p1 = proj_inv * vec4(-1,-1,-1,1);
@@ -191,7 +192,7 @@ std::vector<MultiViewInfo> extract_multi_view_infos(const std::vector<ExrData>& 
 		infos[i].n2 = vec4(glm::normalize(glm::cross(vec3(h2 - p1), vec3(h1 - p1))), 1);
 		infos[i].n3 = vec4(glm::normalize(glm::cross(vec3(h1 - p1), vec3(h4 - p1))), 1);
 		infos[i].n4 = vec4(glm::normalize(glm::cross(vec3(h4 - h3), vec3(p2 - h3))), 1);
-		//infos[i].cam_origin = glm::inverse(files[i].view_matrix)[3];
+		infos[i].cam_origin = glm::inverse(files[i].view_matrix)[3];
 		infos[i].size_x = files[i].w;
 		infos[i].size_y = files[i].h;
 		
